@@ -1,0 +1,15 @@
+# Working point definitions for the HZa tagger
+# Used by analysis/scripts/plots.py
+
+working_points:
+  loose:
+    signal_efficiency: 0.85
+    label: "85% sig eff"
+
+  medium:
+    signal_efficiency: 0.70
+    label: "70% sig eff"
+
+  tight:
+    signal_efficiency: 0.50
+    label: "50% sig eff"

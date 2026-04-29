@@ -1,0 +1,33 @@
+# Variable lists for the HZa binary tagger — consumed by hza_train.yaml
+# Keep in sync with common/variables.py
+
+jets:
+  - name: pt
+    scale: log
+  - name: eta
+  - name: phi
+  - name: mass
+    scale: log
+
+tracks:
+  # Kinematic
+  - name: pt
+    scale: log
+  - name: eta_rel
+  - name: phi_rel
+  - name: mass
+    scale: log
+  # Charge / identity
+  - name: charge
+  - name: pdgId
+  # Impact parameters (set to 0 if absent in the input file)
+  - name: dxy
+    scale: tanh
+  - name: dz
+    scale: tanh
+  - name: dxySig
+    scale: tanh
+  - name: dzSig
+    scale: tanh
+  - name: trkQuality
+  - name: puppiWeight

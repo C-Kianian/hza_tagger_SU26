@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "hza_tagger"
+version = "0.1.0"
+description = "H→Z(ll)+a(had) jet tagger: CMS btvNanoAOD → H5 converter, SALT training, and analysis"
+requires-python = ">=3.10"
+dependencies = [
+    # Converter
+    "uproot>=5.3",
+    "awkward>=2.6",
+    "h5py>=3.10",
+    "numpy>=1.26",
+    "pyyaml>=6.0",
+    # Coffea (columnar analysis)
+    "coffea>=2024.1",
+    "dask>=2024.1",
+    "dask-jobqueue>=0.8",
+    # Analysis
+    "matplotlib>=3.8",
+    "scikit-learn>=1.4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-cov",
+    "ipykernel",
+    "jupyterlab",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["common*", "converter*", "analysis*"]
+
+[tool.pytest.ini_options]
+testpaths = ["converter/tests", "common"]
+addopts = "-v"

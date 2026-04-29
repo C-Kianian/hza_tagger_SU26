@@ -1,0 +1,41 @@
+# Converter configuration for H→Z(ll)+a(had) signal sample
+# ──────────────────────────────────────────────────────────
+
+name: hza_signal
+
+# Input files — local paths or xrootd URIs
+# One file per line; use {XROOTD_SERVER} env var for site-specific prefix
+files:
+  - /path/to/hzanano_output_1.root
+  # - root://cms-xrd-global.cern.ch//store/...
+
+# TTree name inside the ROOT file
+tree: Events
+
+# Output
+output:
+  train: data/train.h5
+  val:   data/val.h5
+  test:  data/test.h5
+
+# Fraction of events per split (must sum to 1.0)
+split_fractions:
+  train: 0.70
+  val:   0.15
+  test:  0.15
+
+# Jet selection (overrides common/variables.py defaults if set)
+jet_selection:
+  pt_min:  20.0   # GeV
+  eta_max: 2.5
+  jet_id_min: 2
+
+# Number of PFCands (tracks) stored per jet
+n_tracks: 40
+
+# Coffea chunk size (events per chunk)
+chunk_size: 10000
+
+# NanoAOD schema: "NanoAODSchema" or "PFNanoAODSchema"
+# Use PFNanoAODSchema if your file has the full PFCand branches
+nano_schema: PFNanoAODSchema
