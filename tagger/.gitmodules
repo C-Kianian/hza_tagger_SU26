@@ -1,0 +1,4 @@
+[submodule "tagger/salt"]
+	path = tagger/salt
+	url = https://gitlab.cern.ch/aft/algorithms/salt.git
+	branch = main

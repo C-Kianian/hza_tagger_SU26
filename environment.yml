@@ -1,0 +1,43 @@
+name: hza_tagger
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.11
+  - pip
+
+  # Core scientific stack
+  - numpy>=1.26
+  - scipy
+  - matplotlib>=3.8
+  - scikit-learn>=1.4
+
+  # ROOT / HEP
+  - uproot>=5.3
+  - awkward>=2.6
+  - coffea>=2024.1
+  - h5py>=3.10
+
+  # YAML / config
+  - pyyaml>=6.0
+
+  # Dask (local + HTCondor scale-out)
+  - dask>=2024.1
+  - distributed>=2024.1
+
+  # Deep learning (CPU base; GPU via pip below)
+  - pytorch-cpu  # replace with pytorch-gpu or install via pip for CUDA
+
+  # Notebook
+  - jupyterlab
+  - ipykernel
+
+  - pip:
+    # HTCondor job submission
+    - dask-jobqueue>=0.8
+    # SALT (installed as submodule, see tagger/scripts/setup_salt.sh)
+    # - -e tagger/salt
+    # Dev / test
+    - pytest>=8
+    - pytest-cov

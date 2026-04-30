@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+.venv/
+*.egg
+
+# Data files (large — store externally)
+data/
+*.h5
+*.root
+
+# SALT training outputs
+logs/
+lightning_logs/
+
+# Notebooks checkpoints
+.ipynb_checkpoints/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# HTCondor logs
+*.log
+*.err
+*.out
