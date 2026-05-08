@@ -1,6 +1,11 @@
-# hza_tagger
+# Jet tagging of low mass resonances
 
-Jet tagger for H→Z(ll)+a(had) decays in CMS, targeting AK4 PUPPI jets from the hadronic decay of the pseudoscalar **a** (PDG 36).
+This project provides tools to train and evaluate a jet tagger for a H→Z(ll)+a(had) search at the CMS experiment.
+It targets AK4 PUPPI jets from the hadronic decay of the pseudoscalar **a** (PDG 36) using PFCandidates to resolve the jet substructure.
+
+## Description of project
+
+The project has several sub-parts which are explained below:
 
 ```
 hza_tagger/
@@ -9,6 +14,20 @@ hza_tagger/
 ├── tagger/          SALT submodule + training configs and scripts
 └── analysis/        ROC curves, score distributions, working-point studies
 ```
+
+As the first step, you will have to prepare the datasets in the [h5](https://en.wikipedia.org/wiki/Hierarchical_Data_Format) format which can be used to train the machine learning algorithm. This is handled by the tools in `converter`.
+
+The second step is the training of the algorithm. This is handled by the tools inside `tagger`, which make use of the [`salt`](https://ftag-salt.docs.cern.ch) software.
+
+The third step is the evaluation of the tagger performance on test datasets created in the first step using the scripts in `analysis`.
+
+## Literature
+
+- Barr et al., (2025). Salt: Multimodal Multitask Machine Learning for High Energy Physics. Journal of Open Source Software, 10(112), 7217, https://doi.org/10.21105/joss.07217
+- Chisholm, A.S., Kuttimalai, S., Nikolopoulos, K. et al. Measuring rare and exclusive Higgs boson decays into light resonances. Eur. Phys. J. C 76, 501 (2016). https://doi.org/10.1140/epjc/s10052-016-4345-9
+- ATLAS Collaboration. Search for Higgs Boson Decays into a 𝑍 Boson and a Light Hadronically Decaying Resonance Using 13 TeV 𝑝⁢𝑝 Collision Data from the ATLAS Detector. Phys. Rev. Lett. 125, 221802 – Published 25 November, 2020. https://doi.org/10.1103/PhysRevLett.125.221802
+- ATLAS Collaboration. Search for Higgs boson decays into a Z boson and a light hadronically decaying resonance in pp collisions at 13 TeV with the ATLAS detector. Physics Letters B Volume 868, September 2025, 139671. https://doi.org/10.1016/j.physletb.2025.139671
+
 
 ## Quick start
 
@@ -117,29 +136,8 @@ PLOT_DIR=analysis/plots/my_run \
 bash analysis/scripts/evaluate.sh
 ```
 
-The auto-discovery priority is:
-
-| Variable | Search order |
-|----------|-------------|
-| `TEST_FILE` | `data/test.h5` → `data/test_out.h5` → first `data/*.h5` |
-| `CKPT` | lowest `val_loss` across all `logs/*/ckpts/epoch=*-val_loss=*.ckpt`; falls back to `best.ckpt` |
-| `TRAIN_CFG` | `tagger/configs/hza_train.yaml` |
-| `SCORES_FILE` | same dir as test file, `<name>_scores.h5` |
-| `PLOT_DIR` | `analysis/plots/` |
-
 ## Tests
 
 ```bash
 pytest -v
 ```
-
-## Key design decisions
-
-| Choice | Rationale |
-|--------|-----------|
-| Binary label (a-jet vs other) | Simplest discriminant; background jets taken from same signal sample |
-| dR matching to a + daughters | Robust to multiple a's; requires all hadronic daughters inside the jet cone → clean merged-topology label |
-| AK4 PUPPI jets | Standard CMS Run3 jet collection |
-| PFCands as tracks | Rich per-constituent info in btvNanoAOD; IP variables zero-padded when absent (pheno files) |
-| SALT via git submodule | No code fork; thin config layer only; easy to track upstream changes |
-| Coffea columnar converter | Scales from laptop (iterative) to HTCondor (dask-jobqueue) without code changes |

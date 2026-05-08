@@ -8,7 +8,7 @@ dependencies:
   - pip
 
   # Core scientific stack
-  - numpy>=1.26
+  - numpy>=1.24
   - scipy
   - matplotlib>=3.8
   - scikit-learn>=1.4
@@ -26,20 +26,32 @@ dependencies:
   - dask>=2024.1
   - distributed>=2024.1
 
-  # Deep learning (CPU base; GPU via pip below)
-  - pytorch-cpu  # replace with pytorch-gpu or install via pip for CUDA
-
   # Notebook
   - jupyterlab
   - ipykernel
 
   - pip:
-    # setuptools<81 required: pkg_resources was removed in 81, needed by lightning 2.2
+    # setuptools<81 required: pkg_resources removed in 81, needed by lightning 2.2
     - setuptools<81
+
+    # Deep learning — torch 2.2.1 is the version compatible with SALT 0.11
+    # For GPU builds replace with the appropriate CUDA wheel, e.g.:
+    #   pip install torch==2.2.1+cu121 --index-url https://download.pytorch.org/whl/cu121
+    - torch==2.2.1
+    - torchvision==0.17.2
+    - lightning==2.2.0
+
+    # SALT runtime dependencies (also pulled in by setup_salt.sh)
+    - jsonargparse>=4.18
+    - atlas-ftag-tools>=0.2
+    - comet_ml
+
     # HTCondor job submission
     - dask-jobqueue>=0.8
-    # SALT (installed as submodule, see tagger/scripts/setup_salt.sh)
+
+    # SALT itself is installed as an editable submodule — see tagger/scripts/setup_salt.sh
     # - -e tagger/salt
+
     # Dev / test
     - pytest>=8
     - pytest-cov
