@@ -31,6 +31,7 @@ PFCAND_KIN_BRANCHES = [
     "PFCands_mass",
     "PFCands_charge",
     "PFCands_pdgId",
+    "PFCands_genCandIdx",   # index into GenCands (−1 = unmatched); absent in data → handled gracefully
 ]
 
 # PFCand track / IP branches (may be absent in pheno nanos — handled gracefully)
@@ -41,6 +42,21 @@ PFCAND_TRACK_BRANCHES = [
     "PFCands_dzSig",
     "PFCands_trkQuality",
     "PFCands_puppiWeight",
+]
+
+# GenJet branches (AK4, particle-level jets for truth_pt / truth_mass)
+GENJET_BRANCHES = [
+    "GenJet_pt",
+    "GenJet_eta",
+    "GenJet_phi",
+    "GenJet_mass",
+]
+
+# GenCands branches (truth particles matched 1-to-1 to PFCands; pheno nanos only)
+GENCANDS_BRANCHES = [
+    "GenCands_pdgId",
+    "GenCands_isFromB",
+    "GenCands_isFromC",
 ]
 
 # GenPart branches
@@ -72,6 +88,10 @@ TRACK_FEATURES = [
     "dzSig",
     "trkQuality",
     "puppiWeight",
+    # Truth labels for node-classification auxiliary task
+    "truth_pdgId",   # PDG ID of matched GenCand (0 = unmatched)
+    "isFromB",       # 1 if the GenCand originates from a b hadron
+    "isFromC",       # 1 if the GenCand originates from a c hadron
 ]
 
 # Maximum number of tracks (PFCands) per jet stored in H5
@@ -87,3 +107,20 @@ JET_ID_MIN = 2      # tight jet ID bit
 
 # Truth-matching cone
 DR_MATCH = 0.4
+
+# ── Minimal branch filter for uproot/coffea ──────────────────────────────────
+# Pass to NanoEventsFactory via uproot_options={"filter_name": REQUIRED_BRANCHES}
+# The n* counter branches are required by NanoAODSchema to build jagged arrays.
+REQUIRED_BRANCHES = (
+    # event ID scalars (required by NanoAODSchema — cannot be dropped)
+    ["run", "luminosityBlock", "event"]
+    # counters (required by NanoAODSchema jagged builder)
+    + ["nJet", "nJetPFCands", "nPFCands", "nGenPart", "nGenCands", "nGenJet"]
+    + JET_BRANCHES
+    + JET_PFCAND_IDX_BRANCHES
+    + PFCAND_KIN_BRANCHES
+    + PFCAND_TRACK_BRANCHES
+    + GENPART_BRANCHES
+    + GENCANDS_BRANCHES
+    + GENJET_BRANCHES
+)

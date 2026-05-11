@@ -42,31 +42,46 @@ def parse_args():
 
 def convert_one_file(file_path: str, out_path: str, cfg: dict):
     """Worker function executed on the condor node."""
+    import warnings
+    warnings.filterwarnings("ignore", message="Missing cross-reference index", category=RuntimeWarning)
+    warnings.filterwarnings("ignore", message="coffea.nanoevents.methods.vector will be removed", category=FutureWarning)
+
     import awkward as ak
-    from coffea.nanoevents import NanoEventsFactory, NanoAODSchema
+    import uproot
+    from coffea.nanoevents import NanoEventsFactory, NanoAODSchema, PFNanoAODSchema
     from converter.processors.jet_dumper import process_events
     from converter.processors.writer import H5Writer
+    from common.variables import REQUIRED_BRANCHES
 
-    tree_name  = cfg.get("tree", "Events")
-    chunk_size = cfg.get("chunk_size", 10_000)
+    schema_map = {"NanoAODSchema": NanoAODSchema, "PFNanoAODSchema": PFNanoAODSchema}
+    schema     = schema_map.get(cfg.get("nano_schema", "NanoAODSchema"), NanoAODSchema)
 
-    import uproot
-    tree = uproot.open(f"{file_path}:{tree_name}")
+    tree_name           = cfg.get("tree", "Events")
+    chunk_size          = cfg.get("chunk_size", 10_000)
+    max_events_per_file = cfg.get("max_events_per_file", None)
+
+    tree      = uproot.open(f"{file_path}:{tree_name}")
     n_entries = tree.num_entries
+    if max_events_per_file is not None:
+        n_entries = min(n_entries, max_events_per_file)
 
-    with H5Writer(out_path) as writer:
+    writer = H5Writer(out_path)
+    try:
         for start in range(0, n_entries, chunk_size):
             stop  = min(start + chunk_size, n_entries)
             chunk = NanoEventsFactory.from_root(
                 {file_path: tree_name},
                 entry_start=start,
                 entry_stop=stop,
-                schemaclass=NanoAODSchema,
+                schemaclass=schema,
+                uproot_options={"filter_name": REQUIRED_BRANCHES},
             ).events()
             chunk  = ak.Array(chunk.compute())
             arrays = process_events(chunk)
             if len(arrays["jets"]) > 0:
                 writer.write_chunk(arrays["jets"], arrays["tracks"], arrays["labels"])
+            del chunk, arrays
+    finally:
         writer.finalize()
 
 

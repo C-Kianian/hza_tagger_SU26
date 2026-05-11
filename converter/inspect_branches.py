@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Print all branch names in a NanoAOD ROOT file.
 
-Run this locally against your actual file to verify branch names before
+Run this locally against your input file to verify branch names before
 editing converter/configs/ and common/variables.py.
 
 Usage

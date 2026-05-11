@@ -1,7 +1,10 @@
 # Jet tagging of low mass resonances
 
 This project provides tools to train and evaluate a jet tagger for a H→Z(ll)+a(had) search at the CMS experiment.
-It targets AK4 PUPPI jets from the hadronic decay of the pseudoscalar **a** (PDG 36) using PFCandidates to resolve the jet substructure.
+It targets AK4 PUPPI jets from the hadronic decay of the pseudoscalar **a** (PDG 36).
+The algorithm learns to distinguish jets that originate from the hadronic decay of the **a** from other QCD jets using the kinematic properties of the jets and resolving the jet substructure.
+This is achieved by storing both the jet and the associated PFCandidates matched to the jet.
+The training makes use of per-jet labels from MC truth simulation as **a** jet or background jet.
 
 ## Description of project
 
@@ -12,14 +15,14 @@ hza_tagger/
 ├── common/          shared label defs, truth matching, IO schema, variable lists
 ├── converter/       btvNanoAOD ROOT → H5 (coffea, columnar)
 ├── tagger/          SALT submodule + training configs and scripts
-└── analysis/        ROC curves, score distributions, working-point studies
+└── analysis/        plotting scripts for ROC curves, score distributions
 ```
 
-As the first step, you will have to prepare the datasets in the [h5](https://en.wikipedia.org/wiki/Hierarchical_Data_Format) format which can be used to train the machine learning algorithm. This is handled by the tools in `converter`.
+1. As the first step, you will have to prepare the datasets in the [h5](https://en.wikipedia.org/wiki/Hierarchical_Data_Format) format which can be used to train the machine learning algorithm. This is handled by the tools in `converter`.
 
-The second step is the training of the algorithm. This is handled by the tools inside `tagger`, which make use of the [`salt`](https://ftag-salt.docs.cern.ch) software.
+2. The second step is the training of the algorithm. This is handled by the tools inside `tagger`, which make use of the [`salt`](https://ftag-salt.docs.cern.ch) software.
 
-The third step is the evaluation of the tagger performance on test datasets created in the first step using the scripts in `analysis`.
+3. The third step is the evaluation of the tagger performance on test datasets created in the first step using the scripts in `analysis`.
 
 ## Literature
 
@@ -36,7 +39,7 @@ The third step is the evaluation of the tagger performance on test datasets crea
 ```bash
 mamba env create -f environment.yml
 conda activate hza_tagger
-pip install -e .        # installs common/, converter/, analysis/ as a package
+pip install -e .        # installs common/, converter/, analysis/ as a package, the "." is important here!
 ```
 
 ### 2. SALT submodule
@@ -45,7 +48,9 @@ pip install -e .        # installs common/, converter/, analysis/ as a package
 bash tagger/scripts/setup_salt.sh
 ```
 
-### 3. Check your ROOT file's branch names
+### 3. Prepare the converter config
+
+Check your input ROOT file's branch names
 
 ```bash
 python converter/inspect_branches.py /path/to/hzanano_output_1.root
@@ -53,13 +58,12 @@ python converter/inspect_branches.py /path/to/hzanano_output_1.root
 
 Compare with `common/variables.py` and adjust branch names there if needed.
 
-### 4. Edit the converter config
 
 ```bash
 nano converter/configs/hza_signal.yaml   # set file paths, cuts, chunk size
 ```
 
-### 5. Run converter (local, quick test)
+### 4. Run converter (local, quick test)
 
 ```bash
 python converter/run_local.py --config converter/configs/hza_signal.yaml
@@ -71,7 +75,7 @@ three files: `data/train.h5`, `data/val.h5`, `data/test.h5`.
 Pass `--out data/all.h5` to skip the split and write a single file (useful for quick tests).
 Pass `--max-events N` to cap the number of events read.
 
-### 6. Scale out on DESY NAF / HTCondor
+### 5. Scale out on DESY NAF / HTCondor
 
 ```bash
 python converter/run_condor.py \
@@ -80,7 +84,11 @@ python converter/run_condor.py \
     --merge
 ```
 
-### 7. Preprocess + train
+### 6. Preprocess + train
+
+This makes most sense to run on a GPU machine. If you run this on your local computer, you will not have a good time. You can run to test it, but it will be very slow. It is better to move to DESY NAF with GPU access.
+
+Open this page and read it please: [https://docs.desy.de/naf/documentation/gpu-on-naf/](https://docs.desy.de/naf/documentation/gpu-on-naf/)
 
 ```bash
 bash tagger/scripts/preprocess.sh   # computes normalisation dict
@@ -98,7 +106,7 @@ On DESY NAF GPU nodes, add `--trainer.accelerator gpu --trainer.devices 1` to `t
 2. After logging in, open **[comet.com/api/my/settings](https://www.comet.com/api/my/settings)** and copy your **API key**.
 3. Create `.env` in the project root (it is git-ignored):
    ```bash
-   cp .env.example .env
+   touch .env && nano .env
    # then open .env and paste your key:
    #   COMET_API_KEY=<your_key>
    ```
@@ -107,7 +115,7 @@ On DESY NAF GPU nodes, add `--trainer.accelerator gpu --trainer.devices 1` to `t
 
 `train.sh` sources `.env` on every run and passes the key to `CometLogger`. Without a key it falls back to offline mode (logs saved under `logs/`).
 
-### 8. Evaluate
+### 7. Evaluate
 
 The evaluation script auto-discovers the test H5 file, the most recent checkpoint, and the training config from the standard project layout:
 

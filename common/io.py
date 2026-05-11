@@ -14,11 +14,16 @@ LABELS_DATASET = "labels"
 # Note: a_jet label is included here so SALT's SaltDataset can find it
 # when processing labels for the "jets" input.
 JET_DTYPE = np.dtype([
-    ("pt",    np.float32),
-    ("eta",   np.float32),
-    ("phi",   np.float32),
-    ("mass",  np.float32),
-    ("a_jet", np.int32),    # truth label: 1=a-jet, 0=background
+    ("pt",           np.float32),
+    ("eta",          np.float32),
+    ("phi",          np.float32),
+    ("mass",         np.float32),
+    # Truth labels for jet-classification task
+    ("a_jet",        np.int32),    # truth label: 1=a-jet, 0=background
+    # Truth kinematics — filled from GenJet dR-matching (falls back to reco when unavailable)
+    ("truth_pt",     np.float32),  # pT of the matched GenJet (or reco jet if unmatched)
+    ("truth_mass",   np.float32),  # mass of the matched GenJet (or reco jet if unmatched)
+    ("truth_a_mass", np.float32),  # pole mass of the a boson from GenPart (0 for background)
 ])
 
 # dtype of the tracks structured array stored in H5
@@ -37,6 +42,10 @@ TRACK_DTYPE = np.dtype([
     ("trkQuality",  np.int8),
     ("puppiWeight", np.float32),
     ("valid",       np.bool_),   # False for padding slots
+    # Truth labels for node-classification auxiliary task (0 when unavailable)
+    ("truth_pdgId", np.int32),
+    ("isFromB",     np.int8),
+    ("isFromC",     np.int8),
 ])
 
 LABEL_DTYPE = np.dtype([

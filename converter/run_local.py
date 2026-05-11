@@ -25,8 +25,13 @@ import uproot
 import awkward as ak
 from coffea.nanoevents import NanoEventsFactory, NanoAODSchema
 
+import warnings
+warnings.filterwarnings("ignore", message="Missing cross-reference index", category=RuntimeWarning)
+warnings.filterwarnings("ignore", message="coffea.nanoevents.methods.vector will be removed", category=FutureWarning)
+
 from converter.processors.jet_dumper import process_events
 from converter.processors.writer import H5Writer
+from common.variables import REQUIRED_BRANCHES
 
 
 def parse_args():
@@ -38,18 +43,6 @@ def parse_args():
     return p.parse_args()
 
 
-def _assign_splits(n: int, fracs: dict[str, float], rng: np.random.Generator) -> np.ndarray:
-    """Return an integer array of length n with values 0=train, 1=val, 2=test."""
-    idx = rng.permutation(n)
-    splits = np.empty(n, dtype=np.int8)
-    cut1 = int(round(fracs["train"] * n))
-    cut2 = cut1 + int(round(fracs["val"] * n))
-    splits[idx[:cut1]]  = 0  # train
-    splits[idx[cut1:cut2]] = 1  # val
-    splits[idx[cut2:]]  = 2  # test
-    return splits
-
-
 def main():
     args = parse_args()
     cfg  = yaml.safe_load(Path(args.config).read_text())
@@ -57,89 +50,114 @@ def main():
     single_out = args.out  # None → use split mode
     chunk_size = cfg.get("chunk_size", 10_000)
     max_events = args.max_events
+    max_events_per_file = cfg.get("max_events_per_file", None)  # per-file cap from config
     tree_name  = cfg.get("tree", "Events")
     rng        = np.random.default_rng(args.seed)
 
-    # ── collect ALL arrays first, then split ─────────────────────────────────
-    # This is memory-efficient for pheno files (order of MB); for large
-    # production samples use run_condor.py and merge afterwards.
-    all_jets   = []
-    all_tracks = []
-    all_labels = []
-    n_processed = 0
+    fracs = cfg.get("split_fractions", {"train": 0.70, "val": 0.15, "test": 0.15})
+    split_names = list(fracs.keys())           # ["train", "val", "test"]
+    split_probs = np.array([fracs[k] for k in split_names], dtype=float)
+    split_probs /= split_probs.sum()           # normalise in case of rounding
 
-    for file_path in cfg["files"]:
-        print(f"\nProcessing: {file_path}")
-        try:
-            f    = uproot.open(file_path)
-            tree = f[tree_name]
-        except FileNotFoundError:
-            print(f"  WARNING: file not found, skipping")
-            continue
+    # ── open output writers up front, stream chunks directly ─────────────────
+    # This keeps peak RAM at O(one chunk) rather than O(entire dataset).
+    if single_out:
+        writers = {None: H5Writer(single_out)}
+    else:
+        out = cfg["output"]
+        writers = {name: H5Writer(out[name]) for name in split_names}
 
-        n_entries = tree.num_entries
-        if max_events is not None:
-            n_entries = min(n_entries, max_events - n_processed)
-        if n_entries <= 0:
-            break
+    n_processed  = 0
+    total_jets   = 0
+    total_a      = 0
+    split_counts = {k: 0 for k in (split_names if not single_out else [None])}
 
-        for start in range(0, n_entries, chunk_size):
-            stop = min(start + chunk_size, n_entries)
-            chunk = NanoEventsFactory.from_root(
-                {file_path: tree_name},
-                entry_start=start,
-                entry_stop=stop,
-                schemaclass=NanoAODSchema,
-            ).events()
-            chunk = ak.Array(chunk.compute())
-            arrays = process_events(chunk)
-
-            if len(arrays["jets"]) == 0:
+    try:
+        for file_path in cfg["files"]:
+            print(f"\nProcessing: {file_path}")
+            try:
+                f    = uproot.open(file_path)
+                tree = f[tree_name]
+            except FileNotFoundError:
+                print(f"  WARNING: file not found, skipping")
                 continue
 
-            all_jets.append(arrays["jets"])
-            all_tracks.append(arrays["tracks"])
-            all_labels.append(arrays["labels"])
-            n_a = int(arrays["labels"]["a_jet"].sum())
-            print(f"  events {start}–{stop}: {len(arrays['jets'])} jets  ({n_a} a-jets)")
+            n_entries = tree.num_entries
+            if max_events_per_file is not None:
+                n_entries = min(n_entries, max_events_per_file)
+            if max_events is not None:
+                n_entries = min(n_entries, max_events - n_processed)
+            if n_entries <= 0:
+                break
 
-            n_processed += stop - start
+            for start in range(0, n_entries, chunk_size):
+                stop = min(start + chunk_size, n_entries)
+                chunk = NanoEventsFactory.from_root(
+                    {file_path: tree_name},
+                    entry_start=start,
+                    entry_stop=stop,
+                    schemaclass=NanoAODSchema,
+                    uproot_options={"filter_name": REQUIRED_BRANCHES},
+                ).events()
+                chunk = ak.Array(chunk.compute())
+                arrays_out = process_events(chunk)
+
+                n_events_in_chunk = stop - start
+
+                n_chunk = len(arrays_out["jets"])
+                if n_chunk == 0:
+                    continue
+
+                n_a = int(arrays_out["labels"]["a_jet"].sum())
+                print(f"  events {start}\u2013{stop}: {n_chunk} jets  ({n_a} a-jets)")
+                total_jets += n_chunk
+                total_a    += n_a
+
+                if single_out:
+                    writers[None].write_chunk(
+                        arrays_out["jets"], arrays_out["tracks"], arrays_out["labels"]
+                    )
+                    split_counts[None] += n_chunk
+                else:
+                    # Assign each jet in this chunk to a split randomly
+                    ids = rng.choice(len(split_names), size=n_chunk, p=split_probs)
+                    for i, name in enumerate(split_names):
+                        mask = ids == i
+                        if not mask.any():
+                            continue
+                        writers[name].write_chunk(
+                            arrays_out["jets"][mask],
+                            arrays_out["tracks"][mask],
+                            arrays_out["labels"][mask],
+                        )
+                        split_counts[name] += int(mask.sum())
+
+                # Release chunk memory explicitly
+                del chunk, arrays_out
+
+                n_processed += n_events_in_chunk
+                if max_events is not None and n_processed >= max_events:
+                    break
+
             if max_events is not None and n_processed >= max_events:
                 break
 
-        if max_events is not None and n_processed >= max_events:
-            break
+    finally:
+        for w in writers.values():
+            w.finalize()
 
-    if not all_jets:
+    if total_jets == 0:
         print("No jets found — check your config files.")
         return
 
-    jets   = np.concatenate(all_jets)
-    tracks = np.concatenate(all_tracks)
-    labels = np.concatenate(all_labels)
-    total_jets = len(jets)
-    total_a    = int(labels["a_jet"].sum())
     print(f"\nTotal jets: {total_jets}  a-jets: {total_a}  ({100*total_a/max(total_jets,1):.1f}%)")
 
-    # ── write ─────────────────────────────────────────────────────────────────
     if single_out:
-        with H5Writer(single_out) as w:
-            w.write_chunk(jets, tracks, labels)
-            w.finalize()
         print(f"Written to: {single_out}")
     else:
-        fracs = cfg.get("split_fractions", {"train": 0.70, "val": 0.15, "test": 0.15})
-        out   = cfg["output"]
-        split_ids = _assign_splits(total_jets, fracs, rng)
-
-        for split_idx, (split_name, path) in enumerate(out.items()):
-            mask = split_ids == split_idx
-            n_split = mask.sum()
-            with H5Writer(path) as w:
-                w.write_chunk(jets[mask], tracks[mask], labels[mask])
-                w.finalize()
-            n_a_split = int(labels[mask]["a_jet"].sum())
-            print(f"  {split_name:5s}: {n_split:6d} jets  ({n_a_split} a-jets)  → {path}")
+        out = cfg["output"]
+        for name in split_names:
+            print(f"  {name:5s}: {split_counts[name]:6d} jets  → {out[name]}")
 
 
 if __name__ == "__main__":

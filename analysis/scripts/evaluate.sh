@@ -65,7 +65,7 @@ elif [[ -z "${CKPT:-}" ]]; then
     # Also handles the conventional best.ckpt name for other SALT versions.
     _best_by_loss() {
         # list all ckpts across all runs, extract val_loss from filename, sort numerically
-        ls -1 logs/*/*/version_*/ckpts/*.ckpt logs/*/checkpoints/best.ckpt 2>/dev/null \
+        ls -1 logs/*/ckpts/*.ckpt logs/*/*/version_*/ckpts/*.ckpt logs/*/checkpoints/best.ckpt 2>/dev/null \
             | awk -F'val_loss=' '
                 NF==2 { val=$2; sub(/\.ckpt$/,"",val); print val, $0 }
                 NF==1 { print "best", $0 }   # best.ckpt has no loss in name

@@ -58,7 +58,11 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model.to(device)
 
-    # Copy input to output (preserves jets/tracks/labels)
+    # Copy input to output (preserves jets/tracks/labels).
+    # Remove any stale output file first to avoid HDF5 lock errors on re-runs.
+    out_path = Path(args.output)
+    if out_path.exists():
+        out_path.unlink()
     shutil.copy2(args.input, args.output)
 
     from common.io import JETS_DATASET, TRACKS_DATASET

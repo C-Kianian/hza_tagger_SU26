@@ -1,13 +1,15 @@
 """Coffea processor: btvNanoAOD → structured H5 arrays for HZa tagger.
 
-For each event the processor:
+For each chunk of events the processor:
 1. Selects AK4 PUPPI jets (pt/eta/jetId cuts).
 2. Labels each jet as a-jet (1) or other (0) via dR matching to the
-   a boson (PDG 36) and its hadronic daughters in GenPart.
+   a boson (PDG 36) and its hadronic daughters in GenPart. Also dR-matches
+   each jet to the nearest GenJet to obtain truth_pt and truth_mass.
 3. Gathers PFCands associated to each jet (via JetPFCands index arrays),
    computes relative kinematics w.r.t. the jet axis, and zero-pads to
    N_TRACKS constituents.
 4. Returns a dict of numpy structured arrays ready for H5Writer.
+
 """
 
 from __future__ import annotations
@@ -21,31 +23,34 @@ from common.variables import (
     JET_ETA_MAX,
     JET_ID_MIN,
     N_TRACKS,
+    DR_MATCH,
 )
 from common.io import JET_DTYPE, TRACK_DTYPE, LABEL_DTYPE
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
-def _phi_diff(phi1, phi2):
-    """Compute phi1 - phi2 wrapped to [-π, π]."""
-    diff = phi1 - phi2
-    return ak.where(diff > np.pi, diff - 2 * np.pi,
-           ak.where(diff < -np.pi, diff + 2 * np.pi, diff))
+def _flat(arr) -> np.ndarray:
+    """Flatten a ragged awkward array to a 1-D numpy array."""
+    return ak.to_numpy(ak.flatten(arr))
 
 
-def _safe_field(cands, field: str, default: float = 0.0):
-    """Return cands[field] if available, else a zero-filled array of same shape."""
+def _flat_pf_field(pf, field: str, default: float = 0.0) -> np.ndarray:
+    """Return flat PFCand field array; fill with *default* if absent."""
     try:
-        return cands[field]
+        return _flat(pf[field])
     except (ValueError, ak.errors.FieldNotFoundError):
-        return ak.zeros_like(cands["pt"]) + default
+        return np.full(int(ak.sum(ak.num(pf.pt))), default, dtype=np.float32)
 
 
-def _pad_tracks(arr: ak.Array, n: int) -> np.ndarray:
-    """Pad/truncate ragged (n_jets, var) → dense (n_jets, n) numpy array."""
-    padded = ak.pad_none(arr[:, :n], n, clip=True)
-    return ak.to_numpy(ak.fill_none(padded, 0))
+def _sel_remap(flat_sel: np.ndarray) -> np.ndarray:
+    """Global selected-jet index for each original jet slot (-1 if not selected).
+
+    Fully vectorised: the global selected-jet index of jet j is simply
+    cumsum(flat_sel)[j] - 1 when flat_sel[j] is True.
+    """
+    cs = np.cumsum(flat_sel.astype(np.int64))
+    return np.where(flat_sel, cs - 1, -1)
 
 
 # ── main processor function ────────────────────────────────────────────────────
@@ -66,20 +71,19 @@ def process_events(events) -> dict[str, np.ndarray]:
     # ── 1. Jet selection ─────────────────────────────────────────────────────
     jets = events.Jet
     sel = (jets.pt > JET_PT_MIN) & (abs(jets.eta) < JET_ETA_MAX)
-    # jetId may be absent in pheno-level NanoAOD
     try:
         sel = sel & (jets.jetId >= JET_ID_MIN)
     except (AttributeError, ak.errors.FieldNotFoundError):
         pass
-    jets = jets[sel]
 
-    n_jets_total = ak.sum(ak.num(jets))
-    if n_jets_total == 0:
+    jets_sel    = jets[sel]
+    n_sel_total = int(ak.sum(ak.num(jets_sel)))
+    if n_sel_total == 0:
         return _empty_arrays()
 
     # ── 2. Truth labeling ────────────────────────────────────────────────────
     gp = events.GenPart
-    labels_ak = label_jets(
+    truth = label_jets(
         jet_eta=jets.eta,
         jet_phi=jets.phi,
         gen_eta=gp.eta,
@@ -87,165 +91,169 @@ def process_events(events) -> dict[str, np.ndarray]:
         gen_pdgid=gp.pdgId,
         gen_mother_idx=gp.genPartIdxMother,
         gen_status_flags=gp.statusFlags,
+        gen_mass=gp.mass,
     )
+    labels_sel      = _flat(truth["labels"][sel]).astype(np.int32)
+    truth_amass_sel = _flat(truth["truth_a_mass"][sel]).astype(np.float32)
 
-    # ── 3. PFCand gathering ──────────────────────────────────────────────────
-    # JetPFCands gives (flat) arrays with jetIdx and pFCandsIdx.
-    # We need to group pfcand indices by jet, then look up PFCands fields.
-    pf = events.PFCands
-    jpc = events.JetPFCands  # flat: jetIdx, pFCandsIdx per event
+    # ── 2b. GenJet dR-matching → truth_pt and truth_mass ────────────────────
+    # Match each selected reco jet to the nearest GenJet within DR_MATCH.
+    # Fall back to reco pt/mass when no GenJet is found (e.g. background data).
+    flat_jet_eta = ak.to_numpy(ak.flatten(jets_sel.eta)).astype(np.float32)
+    flat_jet_phi = ak.to_numpy(ak.flatten(jets_sel.phi)).astype(np.float32)
+    try:
+        gj_eta  = ak.to_numpy(ak.flatten(events.GenJet.eta)).astype(np.float32)
+        gj_phi  = ak.to_numpy(ak.flatten(events.GenJet.phi)).astype(np.float32)
+        gj_pt   = ak.to_numpy(ak.flatten(events.GenJet.pt)).astype(np.float32)
+        gj_mass = ak.to_numpy(ak.flatten(events.GenJet.mass)).astype(np.float32)
+        n_gj_per_evt = ak.to_numpy(ak.num(events.GenJet.pt)).astype(np.int64)
+        gj_offsets   = np.concatenate([[0], np.cumsum(n_gj_per_evt)])
 
-    # Build a per-jet list of PFCand indices
-    # sorted by pT descending (proxy for importance)
-    pfcand_idx = jpc.pFCandsIdx  # ragged over events (flat within event)
-    jet_idx    = jpc.jetIdx
+        n_jets_per_evt = ak.to_numpy(ak.num(jets_sel.pt)).astype(np.int64)
+        jet_offsets    = np.concatenate([[0], np.cumsum(n_jets_per_evt)])
 
-    # Map each JetPFCands entry to its reco jet's new index after selection.
-    # We need to account for the jet selection mask: remap original jet indices.
-    # Build an index map: original jet index → selected jet position (-1 if removed)
-    n_jets_orig = ak.num(events.Jet)  # before selection
-    # Selection mask per event (bool, ragged)
-    sel_mask = sel
+        truth_pt_sel   = _flat(jets_sel.pt).astype(np.float32)   # fallback = reco
+        truth_mass_sel = _flat(jets_sel.mass).astype(np.float32)
 
-    # Remap: for each event build array of length n_jets_orig mapping orig→selected
-    # selected index = cumsum of mask up to that point - 1
-    sel_cumsum = ak.Array([np.cumsum(np.asarray(m, dtype=int)) - 1 for m in sel_mask])
-    sel_flat = ak.Array([np.asarray(m, dtype=bool) for m in sel_mask])
-
-    # For each JetPFCands entry: keep only if its jet passed selection
-    jet_passed = ak.Array([
-        np.asarray(sf, dtype=bool)[np.asarray(ji, dtype=int)]
-        if len(ji) > 0 else np.array([], dtype=bool)
-        for sf, ji in zip(sel_flat, jet_idx)
-    ])
-    pfcand_idx_sel = pfcand_idx[jet_passed]
-    jet_idx_sel    = jet_idx[jet_passed]
-
-    # Remap jet indices to post-selection numbering
-    jet_idx_remapped = ak.Array([
-        np.asarray(sc, dtype=int)[np.asarray(ji, dtype=int)]
-        if len(ji) > 0 else np.array([], dtype=int)
-        for sc, ji in zip(sel_cumsum, jet_idx_sel)
-    ])
-
-    # Gather PFCand fields per event
-    pf_pt     = pf.pt
-    pf_eta    = pf.eta
-    pf_phi    = pf.phi
-    pf_mass   = pf.mass
-    pf_charge = pf.charge
-    pf_pdgid  = pf.pdgId
-    pf_dxy       = _safe_field(pf, "dxy")
-    pf_dz        = _safe_field(pf, "dz")
-    pf_dxySig    = _safe_field(pf, "dxySig")
-    pf_dzSig     = _safe_field(pf, "dzSig")
-    pf_trkQual   = _safe_field(pf, "trkQuality")
-    pf_puppi     = _safe_field(pf, "puppiWeight", default=1.0)
-
-    # Per-event: build (n_sel_jets, var_n_cands) ragged arrays
-    # We accumulate flat arrays then split by sel-jet index
-    all_jet_arrays = []  # list of dicts, one per event
-
-    for ievt in range(len(jets)):
-        n_sel = ak.num(jets)[ievt]
-        if n_sel == 0:
-            all_jet_arrays.append(None)
-            continue
-
-        ji  = np.asarray(jet_idx_remapped[ievt], dtype=int)
-        pci = np.asarray(pfcand_idx_sel[ievt], dtype=int)
-
-        # Sort by pT descending within each jet
-        pt_vals = np.asarray(pf_pt[ievt])[pci]
-        order = np.argsort(-pt_vals)
-        ji  = ji[order]
-        pci = pci[order]
-
-        # Build per-jet constituent lists
-        jet_cands = [[] for _ in range(n_sel)]
-        for j, p in zip(ji, pci):
-            jet_cands[j].append(p)
-
-        jet_eta_vals = np.asarray(jets[ievt].eta)
-        jet_phi_vals = np.asarray(jets[ievt].phi)
-
-        # Retrieve all needed PFCand arrays for this event
-        get = lambda arr: np.asarray(arr[ievt])
-        pt_a       = get(pf_pt);    eta_a   = get(pf_eta);    phi_a   = get(pf_phi)
-        mass_a     = get(pf_mass);  chg_a   = get(pf_charge); pdg_a   = get(pf_pdgid)
-        dxy_a      = get(pf_dxy);   dz_a    = get(pf_dz)
-        dxySig_a   = get(pf_dxySig); dzSig_a = get(pf_dzSig)
-        trkQ_a     = get(pf_trkQual); puppi_a = get(pf_puppi)
-
-        evt_data = {
-            "jet_cands": jet_cands,
-            "jet_eta":   jet_eta_vals,
-            "jet_phi":   jet_phi_vals,
-            "pt":        pt_a,   "eta":  eta_a,   "phi":  phi_a,
-            "mass":      mass_a, "charge": chg_a, "pdgId": pdg_a,
-            "dxy":       dxy_a,  "dz":   dz_a,
-            "dxySig":    dxySig_a, "dzSig": dzSig_a,
-            "trkQuality": trkQ_a,  "puppiWeight": puppi_a,
-        }
-        all_jet_arrays.append(evt_data)
-
-    # ── 4. Flatten to numpy structured arrays ─────────────────────────────────
-    jet_pt_flat  = np.concatenate([np.asarray(jets[i].pt)   for i in range(len(jets))])
-    jet_eta_flat = np.concatenate([np.asarray(jets[i].eta)  for i in range(len(jets))])
-    jet_phi_flat = np.concatenate([np.asarray(jets[i].phi)  for i in range(len(jets))])
-    jet_mass_flat= np.concatenate([np.asarray(jets[i].mass) for i in range(len(jets))])
-    labels_flat  = np.concatenate([np.asarray(labels_ak[i]) for i in range(len(labels_ak))])
-
-    n_jets = len(jet_pt_flat)
-
-    jets_arr = np.zeros(n_jets, dtype=JET_DTYPE)
-    jets_arr["pt"]    = jet_pt_flat
-    jets_arr["eta"]   = jet_eta_flat
-    jets_arr["phi"]   = jet_phi_flat
-    jets_arr["mass"]  = jet_mass_flat
-    jets_arr["a_jet"] = labels_flat
-
-    labels_arr = np.zeros(n_jets, dtype=LABEL_DTYPE)
-    labels_arr["a_jet"] = labels_flat
-
-    # Build track array: (n_jets, N_TRACKS)
-    tracks_arr = np.zeros((n_jets, N_TRACKS), dtype=TRACK_DTYPE)
-    tracks_arr["valid"] = False
-
-    jet_global_idx = 0
-    for ievt, evt_data in enumerate(all_jet_arrays):
-        if evt_data is None:
-            continue
-        n_sel = len(evt_data["jet_eta"])
-        for j in range(n_sel):
-            cand_idxs = evt_data["jet_cands"][j]
-            if not cand_idxs:
-                jet_global_idx += 1
+        for ievt in range(len(n_jets_per_evt)):
+            js = jet_offsets[ievt];  je = jet_offsets[ievt + 1]
+            gs = gj_offsets[ievt];   ge = gj_offsets[ievt + 1]
+            if js == je or gs == ge:
                 continue
-            c = np.array(cand_idxs[:N_TRACKS])
-            nc = len(c)
-            j_eta = evt_data["jet_eta"][j]
-            j_phi = evt_data["jet_phi"][j]
-            trk = tracks_arr[jet_global_idx, :nc]
-            trk["pt"]          = evt_data["pt"][c]
-            trk["eta_rel"]     = evt_data["eta"][c] - j_eta
-            # wrap phi difference
-            dphi = evt_data["phi"][c] - j_phi
-            dphi = np.where(dphi > np.pi, dphi - 2*np.pi,
-                   np.where(dphi < -np.pi, dphi + 2*np.pi, dphi))
-            trk["phi_rel"]     = dphi
-            trk["mass"]        = evt_data["mass"][c]
-            trk["charge"]      = evt_data["charge"][c].astype(np.int8)
-            trk["pdgId"]       = evt_data["pdgId"][c].astype(np.int32)
-            trk["dxy"]         = evt_data["dxy"][c]
-            trk["dz"]          = evt_data["dz"][c]
-            trk["dxySig"]      = evt_data["dxySig"][c]
-            trk["dzSig"]       = evt_data["dzSig"][c]
-            trk["trkQuality"]  = evt_data["trkQuality"][c].astype(np.int8)
-            trk["puppiWeight"] = evt_data["puppiWeight"][c]
-            trk["valid"]       = True
-            tracks_arr[jet_global_idx, :nc] = trk
-            jet_global_idx += 1
+            j_eta = flat_jet_eta[js:je, None]   # (nj, 1)
+            j_phi = flat_jet_phi[js:je, None]
+            g_eta = gj_eta[gs:ge][None, :]           # (1, ng)
+            g_phi = gj_phi[gs:ge][None, :]
+            dphi  = j_phi - g_phi
+            dphi  = np.where(dphi >  np.pi, dphi - 2 * np.pi,
+                    np.where(dphi < -np.pi, dphi + 2 * np.pi, dphi))
+            dr    = np.sqrt((j_eta - g_eta)**2 + dphi**2)  # (nj, ng)
+            best  = np.argmin(dr, axis=1)                  # (nj,)
+            matched = dr[np.arange(len(best)), best] < DR_MATCH
+            idxs  = js + np.where(matched)[0]
+            truth_pt_sel  [idxs] = gj_pt  [gs:ge][best[matched]]
+            truth_mass_sel[idxs] = gj_mass[gs:ge][best[matched]]
+
+    except (AttributeError, ak.errors.FieldNotFoundError):
+        # No GenJet collection (data) — fall back to reco
+        truth_pt_sel   = _flat(jets_sel.pt).astype(np.float32)
+        truth_mass_sel = _flat(jets_sel.mass).astype(np.float32)
+
+    # ── 3. Vectorised PFCand gathering ───────────────────────────────────────
+    n_events = len(jets)
+
+    n_jets_orig      = ak.to_numpy(ak.num(jets)).astype(np.int64)
+    jet_orig_offsets = np.concatenate([[0], np.cumsum(n_jets_orig)])
+    flat_sel         = _flat(sel).astype(bool)
+    sel_remap        = _sel_remap(flat_sel)
+
+    jpc          = events.JetPFCands
+    n_jpc        = ak.to_numpy(ak.num(jpc.jetIdx)).astype(np.int64)
+    flat_jpc_jet = _flat(jpc.jetIdx).astype(np.int64)
+    flat_jpc_pfc = _flat(jpc.pFCandsIdx).astype(np.int64)
+    evt_of_jpc   = np.repeat(np.arange(n_events, dtype=np.int64), n_jpc)
+
+    global_orig_jet = jet_orig_offsets[evt_of_jpc] + flat_jpc_jet
+    keep            = flat_sel[global_orig_jet]
+
+    global_sel_jet = sel_remap[global_orig_jet[keep]]
+    flat_jpc_pfc_k = flat_jpc_pfc[keep]
+    evt_of_jpc_k   = evt_of_jpc[keep]
+
+    pf         = events.PFCands
+    n_pf       = ak.to_numpy(ak.num(pf.pt)).astype(np.int64)
+    pf_offsets = np.concatenate([[0], np.cumsum(n_pf)])
+    global_pfc = pf_offsets[evt_of_jpc_k] + flat_jpc_pfc_k
+
+    fp_pt     = _flat_pf_field(pf, "pt")
+    fp_eta    = _flat_pf_field(pf, "eta")
+    fp_phi    = _flat_pf_field(pf, "phi")
+    fp_mass   = _flat_pf_field(pf, "mass")
+    fp_charge = _flat_pf_field(pf, "charge")
+    fp_pdgid  = _flat_pf_field(pf, "pdgId")
+    fp_dxy    = _flat_pf_field(pf, "dxy")
+    fp_dz     = _flat_pf_field(pf, "dz")
+    fp_dxySig = _flat_pf_field(pf, "dxySig")
+    fp_dzSig  = _flat_pf_field(pf, "dzSig")
+    fp_trkQ   = _flat_pf_field(pf, "trkQuality")
+    fp_puppi  = _flat_pf_field(pf, "puppiWeight", default=1.0)
+
+    # Sort by (global_sel_jet, -pt) → pT-descending within each jet
+    order            = np.lexsort((-fp_pt[global_pfc], global_sel_jet))
+    global_sel_jet_s = global_sel_jet[order]
+    global_pfc_s     = global_pfc[order]
+
+    # Within-jet position index
+    boundary    = np.empty(len(global_sel_jet_s), dtype=bool)
+    boundary[0] = True
+    boundary[1:] = global_sel_jet_s[1:] != global_sel_jet_s[:-1]
+    group_start  = np.where(boundary)[0]
+    group_id     = np.searchsorted(group_start,
+                                   np.arange(len(global_sel_jet_s)), side="right") - 1
+    within_pos   = np.arange(len(global_sel_jet_s)) - group_start[group_id]
+
+    mask  = within_pos < N_TRACKS
+    jet_f = global_sel_jet_s[mask]
+    pos_f = within_pos[mask].astype(np.int64)
+    pfc_f = global_pfc_s[mask]
+
+    # ── 4. Assemble output arrays ─────────────────────────────────────────────
+    jets_arr                  = np.zeros(n_sel_total, dtype=JET_DTYPE)
+    jets_arr["pt"]            = _flat(jets_sel.pt)
+    jets_arr["eta"]           = flat_jet_eta
+    jets_arr["phi"]           = flat_jet_phi
+    jets_arr["mass"]          = _flat(jets_sel.mass)
+    jets_arr["a_jet"]         = labels_sel
+    jets_arr["truth_pt"]      = truth_pt_sel
+    jets_arr["truth_mass"]    = truth_mass_sel
+    jets_arr["truth_a_mass"]  = truth_amass_sel
+
+    labels_arr          = np.zeros(n_sel_total, dtype=LABEL_DTYPE)
+    labels_arr["a_jet"] = labels_sel
+
+    # Vectorised scatter into (n_jets, N_TRACKS) track array
+    tracks_arr = np.zeros((n_sel_total, N_TRACKS), dtype=TRACK_DTYPE)
+
+    dphi = fp_phi[pfc_f] - flat_jet_phi[jet_f]
+    dphi = np.where(dphi >  np.pi, dphi - 2 * np.pi,
+           np.where(dphi < -np.pi, dphi + 2 * np.pi, dphi))
+
+    tracks_arr["pt"]         [jet_f, pos_f] = fp_pt[pfc_f]
+    tracks_arr["eta_rel"]    [jet_f, pos_f] = fp_eta[pfc_f] - flat_jet_eta[jet_f]
+    tracks_arr["phi_rel"]    [jet_f, pos_f] = dphi
+    tracks_arr["mass"]       [jet_f, pos_f] = fp_mass[pfc_f]
+    tracks_arr["charge"]     [jet_f, pos_f] = fp_charge[pfc_f].astype(np.int8)
+    tracks_arr["pdgId"]      [jet_f, pos_f] = fp_pdgid[pfc_f].astype(np.int32)
+    tracks_arr["dxy"]        [jet_f, pos_f] = fp_dxy[pfc_f]
+    tracks_arr["dz"]         [jet_f, pos_f] = fp_dz[pfc_f]
+    tracks_arr["dxySig"]     [jet_f, pos_f] = fp_dxySig[pfc_f]
+    tracks_arr["dzSig"]      [jet_f, pos_f] = fp_dzSig[pfc_f]
+    tracks_arr["trkQuality"] [jet_f, pos_f] = fp_trkQ[pfc_f].astype(np.int8)
+    tracks_arr["puppiWeight"][jet_f, pos_f] = fp_puppi[pfc_f]
+    tracks_arr["valid"]      [jet_f, pos_f] = True
+
+    # ── 5. PFCand → GenCands truth labels (absent in data → silently skipped) ──
+    try:
+        gc = events.GenCands
+        n_gc       = ak.to_numpy(ak.num(gc.pdgId)).astype(np.int64)
+        gc_offsets = np.concatenate([[0], np.cumsum(n_gc)])
+        gc_pdgid   = _flat(gc.pdgId).astype(np.int32)
+        gc_isFromB = _flat(gc.isFromB).astype(np.int8)
+        gc_isFromC = _flat(gc.isFromC).astype(np.int8)
+
+        fp_gcIdx = _flat_pf_field(pf, "genCandIdx", default=-1).astype(np.int64)
+
+        # Determine which event each selected global PFCand belongs to
+        evt_of_pfc_f = np.searchsorted(pf_offsets[1:], pfc_f, side="right")
+        local_gc     = fp_gcIdx[pfc_f]
+        has_match    = local_gc >= 0
+        global_gc    = np.where(has_match, gc_offsets[evt_of_pfc_f] + local_gc, 0)
+
+        tracks_arr["truth_pdgId"][jet_f, pos_f] = np.where(has_match, gc_pdgid[global_gc],   0)
+        tracks_arr["isFromB"]    [jet_f, pos_f] = np.where(has_match, gc_isFromB[global_gc], 0)
+        tracks_arr["isFromC"]    [jet_f, pos_f] = np.where(has_match, gc_isFromC[global_gc], 0)
+    except (AttributeError, ak.errors.FieldNotFoundError):
+        pass  # background (data) files have no GenCands — leave fields at 0
 
     return {"jets": jets_arr, "tracks": tracks_arr, "labels": labels_arr}
 
