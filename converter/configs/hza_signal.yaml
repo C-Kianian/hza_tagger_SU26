@@ -6,19 +6,19 @@ name: hza_signal
 # Input files — local paths or xrootd URIs
 # One file per line; use {XROOTD_SERVER} env var for site-specific prefix
 files:
-    # background files (~300k event per file)
+  # background files (~300k event per file)
   - /pnfs/desy.de/cms/tier2/store/user/pgadow/HZa_backgrounds/RunIII2024Summer24BTVNanoAllPF/DYto2Mu_Bin-MLL-50to120_TuneCP5_13p6TeV_powheg-pythia8/RunIII2024Summer24BTVNanoAllPF/260225_105208/0000/*.root 
-    # signal sample files (~1k events per file)
-    #- /pnfs/desy.de/cms/tier2/store/user/mjalalva/ggH_HZa_signals/RunIII2024Summer24/ggH_HZa_mA0_5GeV/RunIII2024Summer24HZANanoAllPF/260504_110127/0000/*.root
-    #- /pnfs/desy.de/cms/tier2/store/user/mjalalva/ggH_HZa_signals/RunIII2024Summer24/ggH_HZa_mA0_75GeV/RunIII2024Summer24HZANanoAllPF/260504_110137/0000/*.root
-    #- /pnfs/desy.de/cms/tier2/store/user/mjalalva/ggH_HZa_signals/RunIII2024Summer24/ggH_HZa_mA1_0GeV/RunIII2024Summer24HZANanoAllPF/260504_110146/0000/*.root
-    #- /pnfs/desy.de/cms/tier2/store/user/mjalalva/ggH_HZa_signals/RunIII2024Summer24/ggH_HZa_mA1_5GeV/RunIII2024Summer24HZANanoAllPF/260504_110155/0000/*.root
-    #- /pnfs/desy.de/cms/tier2/store/user/mjalalva/ggH_HZa_signals/RunIII2024Summer24/ggH_HZa_mA2_0GeV/RunIII2024Summer24HZANanoAllPF/260504_110204/0000/*.root
-    #- /pnfs/desy.de/cms/tier2/store/user/mjalalva/ggH_HZa_signals/RunIII2024Summer24/ggH_HZa_mA2_5GeV/RunIII2024Summer24HZANanoAllPF/260504_110213/0000/*.root
-    #- /pnfs/desy.de/cms/tier2/store/user/mjalalva/ggH_HZa_signals/RunIII2024Summer24/ggH_HZa_mA3_0GeV/RunIII2024Summer24HZANanoAllPF/260504_110222/0000/*.root  
-    #- /pnfs/desy.de/cms/tier2/store/user/mjalalva/ggH_HZa_signals/RunIII2024Summer24/ggH_HZa_mA3_5GeV/RunIII2024Summer24HZANanoAllPF/260504_110231/0000/*.root 
-    #- /pnfs/desy.de/cms/tier2/store/user/mjalalva/ggH_HZa_signals/RunIII2024Summer24/ggH_HZa_mA4_0GeV/RunIII2024Summer24HZANanoAllPF/260504_110240/0000/*.root 
-    #- /pnfs/desy.de/cms/tier2/store/user/mjalalva/ggH_HZa_signals/RunIII2024Summer24/ggH_HZa_mA8_0GeV/RunIII2024Summer24HZANanoAllPF/260504_110249/0000/*.root 
+  # signal sample files (~1k events per file)
+  #- /pnfs/desy.de/cms/tier2/store/user/mjalalva/ggH_HZa_signals/RunIII2024Summer24/ggH_HZa_mA0_5GeV/RunIII2024Summer24HZANanoAllPF/260504_110127/0000/*.root
+  #- /pnfs/desy.de/cms/tier2/store/user/mjalalva/ggH_HZa_signals/RunIII2024Summer24/ggH_HZa_mA0_75GeV/RunIII2024Summer24HZANanoAllPF/260504_110137/0000/*.root
+  #- /pnfs/desy.de/cms/tier2/store/user/mjalalva/ggH_HZa_signals/RunIII2024Summer24/ggH_HZa_mA1_0GeV/RunIII2024Summer24HZANanoAllPF/260504_110146/0000/*.root
+  #- /pnfs/desy.de/cms/tier2/store/user/mjalalva/ggH_HZa_signals/RunIII2024Summer24/ggH_HZa_mA1_5GeV/RunIII2024Summer24HZANanoAllPF/260504_110155/0000/*.root
+  #- /pnfs/desy.de/cms/tier2/store/user/mjalalva/ggH_HZa_signals/RunIII2024Summer24/ggH_HZa_mA2_0GeV/RunIII2024Summer24HZANanoAllPF/260504_110204/0000/*.root
+  #- /pnfs/desy.de/cms/tier2/store/user/mjalalva/ggH_HZa_signals/RunIII2024Summer24/ggH_HZa_mA2_5GeV/RunIII2024Summer24HZANanoAllPF/260504_110213/0000/*.root
+  #- /pnfs/desy.de/cms/tier2/store/user/mjalalva/ggH_HZa_signals/RunIII2024Summer24/ggH_HZa_mA3_0GeV/RunIII2024Summer24HZANanoAllPF/260504_110222/0000/*.root  
+  #- /pnfs/desy.de/cms/tier2/store/user/mjalalva/ggH_HZa_signals/RunIII2024Summer24/ggH_HZa_mA3_5GeV/RunIII2024Summer24HZANanoAllPF/260504_110231/0000/*.root 
+  #- /pnfs/desy.de/cms/tier2/store/user/mjalalva/ggH_HZa_signals/RunIII2024Summer24/ggH_HZa_mA4_0GeV/RunIII2024Summer24HZANanoAllPF/260504_110240/0000/*.root 
+  #- /pnfs/desy.de/cms/tier2/store/user/mjalalva/ggH_HZa_signals/RunIII2024Summer24/ggH_HZa_mA8_0GeV/RunIII2024Summer24HZANanoAllPF/260504_110249/0000/*.root 
   # - root://cms-xrd-global.cern.ch//store/...
 
 # TTree name inside the ROOT file

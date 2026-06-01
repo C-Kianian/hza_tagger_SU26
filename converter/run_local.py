@@ -19,6 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import glob
 import numpy as np
 import yaml
 import uproot
@@ -32,6 +33,8 @@ warnings.filterwarnings("ignore", message="coffea.nanoevents.methods.vector will
 from converter.processors.jet_dumper import process_events
 from converter.processors.writer import H5Writer
 from common.variables import REQUIRED_BRANCHES
+# Comment out the above line and uncomment the below line when running on signal
+# from common.variables_sig import REQUIRED_BRANCHES
 
 
 def parse_args():
@@ -46,6 +49,29 @@ def parse_args():
 def main():
     args = parse_args()
     cfg  = yaml.safe_load(Path(args.config).read_text())
+
+
+    # ──-------------- VIBECODED WILDCARD EXPANSION BLOCK  ──────────────────────────────
+    raw_files = cfg.get("files", [])
+    expanded_files = []
+    for path in raw_files:
+        if "*" in path:
+            # Safely expand wildcards like /path/to/*.root into an array of files
+            matched_files = glob.glob(path)
+            expanded_files.extend(matched_files)
+        else:
+            expanded_files.append(path)
+
+    # Throw a clear error immediately if no files are discovered
+    if not expanded_files:
+        raise FileNotFoundError(
+            f"Error: No ROOT files found matching the configuration paths in {args.config}. "
+            "Please double-check your directory paths or verify your grid certificate via voms-proxy-init."
+        )
+    
+    cfg["files"] = expanded_files
+    # ─────────────────────────────────────────────────────────────────────────
+
 
     single_out = args.out  # None → use split mode
     chunk_size = cfg.get("chunk_size", 10_000)

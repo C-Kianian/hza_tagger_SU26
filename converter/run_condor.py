@@ -22,6 +22,7 @@ Adjust memory/disk/cores for your site.
 from __future__ import annotations
 
 import argparse
+import glob
 import os
 import sys
 from pathlib import Path
@@ -52,6 +53,8 @@ def convert_one_file(file_path: str, out_path: str, cfg: dict):
     from converter.processors.jet_dumper import process_events
     from converter.processors.writer import H5Writer
     from common.variables import REQUIRED_BRANCHES
+    # Comment out the above line and uncomment the below line when running on signal
+    # from common.variables_sig import REQUIRED_BRANCHES
 
     schema_map = {"NanoAODSchema": NanoAODSchema, "PFNanoAODSchema": PFNanoAODSchema}
     schema     = schema_map.get(cfg.get("nano_schema", "NanoAODSchema"), NanoAODSchema)
@@ -118,6 +121,25 @@ def main():
     cfg    = yaml.safe_load(Path(args.config).read_text())
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
+
+    # ───----- VIBECODED WILDCARD EXPANSION BLOCK ──────────────────────────────
+    raw_files = cfg.get("files", [])
+    expanded_files = []
+    for path in raw_files:
+        if "*" in path:
+            matched_files = glob.glob(path)
+            expanded_files.extend(matched_files)
+        else:
+            expanded_files.append(path)
+
+    if not expanded_files:
+        raise FileNotFoundError(
+            f"Error: No ROOT files found matching the configuration paths in {args.config}."
+        )
+    
+    cfg["files"] = expanded_files
+    # ─────────────────────────────────────────────────────────────────────────
+
 
     try:
         from dask_jobqueue import HTCondorCluster
