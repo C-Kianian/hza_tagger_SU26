@@ -7,7 +7,7 @@ only requires a change in one place.
 # ── NanoAOD branch names ─────────────────────────────────────────────────────
 
 # AK4 PUPPI jet branches (standard NanoAOD)
-JET_BRANCHES = [
+Jet = [
     "Jet_pt",
     "Jet_eta",
     "Jet_phi",
@@ -18,13 +18,13 @@ JET_BRANCHES = [
 ]
 
 # Jet ↔ PFCand index branches (btvNanoAOD)
-JET_PFCAND_IDX_BRANCHES = [
+JetPFCands = [
     "JetPFCands_jetIdx",
     "JetPFCands_pFCandsIdx",
 ]
 
 # PFCand kinematic branches
-PFCAND_KIN_BRANCHES = [
+PFCands = [
     "PFCands_pt",
     "PFCands_eta",
     "PFCands_phi",
@@ -35,6 +35,7 @@ PFCAND_KIN_BRANCHES = [
 ]
 
 # PFCand track / IP branches (may be absent in pheno nanos — handled gracefully)
+# Not found in either signal or background files I was given
 PFCAND_TRACK_BRANCHES = [
     "PFCands_dxy",
     "PFCands_dz",
@@ -45,7 +46,7 @@ PFCAND_TRACK_BRANCHES = [
 ]
 
 # GenJet branches (AK4, particle-level jets for truth_pt / truth_mass)
-GENJET_BRANCHES = [
+GenJet = [
     "GenJet_pt",
     "GenJet_eta",
     "GenJet_phi",
@@ -53,14 +54,14 @@ GENJET_BRANCHES = [
 ]
 
 # GenCands branches (truth particles matched 1-to-1 to PFCands; pheno nanos only)
-GENCANDS_BRANCHES = [
+GenCands = [
     "GenCands_pdgId",
     "GenCands_isFromB",
     "GenCands_isFromC",
 ]
 
 # GenPart branches
-GENPART_BRANCHES = [
+GenPart = [
     "GenPart_pt",
     "GenPart_eta",
     "GenPart_phi",
