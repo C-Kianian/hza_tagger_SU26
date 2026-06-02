@@ -25,6 +25,7 @@ class H5Writer:
         self._f = h5py.File(self._path, "w")
         self._compression = compression
         self._compression_opts = compression_opts
+        self._current_size = 0
         self._initialized = False
 
     # ── context manager ──────────────────────────────────────────────────────

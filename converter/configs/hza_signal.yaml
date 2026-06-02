@@ -47,12 +47,12 @@ n_tracks: 40
 
 # Maximum number of events to read per file (null = all events).
 # Useful to cap large background files, e.g. set 200000 for btvNano.
-max_events_per_file: 200000 # background 
-#max_events_per_file: 5000 # signal
+# max_events_per_file: 200000 # background 
+max_events_per_file: 5000 # signal
 
 # Coffea chunk size (events per chunk).
 # Larger = fewer NanoEventsFactory calls = faster; keep below ~1 GB RAM per chunk.
-chunk_size: 5000
+chunk_size: 1000
 
 # NanoAOD schema: "NanoAODSchema" or "PFNanoAODSchema"
 # Use PFNanoAODSchema if your file has the full PFCand branches

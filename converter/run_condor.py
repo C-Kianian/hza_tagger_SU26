@@ -31,7 +31,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import yaml
 
-
 def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--config", required=True)
@@ -44,9 +43,6 @@ def parse_args():
 def convert_one_file(file_path: str, out_path: str, cfg: dict):
     """Worker function executed on the condor node."""
     import warnings
-    warnings.filterwarnings("ignore", message="Missing cross-reference index", category=RuntimeWarning)
-    warnings.filterwarnings("ignore", message="coffea.nanoevents.methods.vector will be removed", category=FutureWarning)
-
     import awkward as ak
     import uproot
     from coffea.nanoevents import NanoEventsFactory, NanoAODSchema, PFNanoAODSchema
@@ -55,6 +51,10 @@ def convert_one_file(file_path: str, out_path: str, cfg: dict):
     from common.variables import REQUIRED_BRANCHES
     # Comment out the above line and uncomment the below line when running on signal
     # from common.variables_sig import REQUIRED_BRANCHES
+
+
+    warnings.filterwarnings("ignore", message="Missing cross-reference index", category=RuntimeWarning)
+    warnings.filterwarnings("ignore", message="coffea.nanoevents.methods.vector will be removed", category=FutureWarning)
 
     schema_map = {"NanoAODSchema": NanoAODSchema, "PFNanoAODSchema": PFNanoAODSchema}
     schema     = schema_map.get(cfg.get("nano_schema", "NanoAODSchema"), NanoAODSchema)
@@ -93,6 +93,7 @@ def merge_files(outdir: Path, merged_path: Path):
     import h5py
     import numpy as np
     from common.io import JETS_DATASET, TRACKS_DATASET, LABELS_DATASET
+
 
     chunks = sorted(outdir.glob("chunk_*.h5"))
     print(f"Merging {len(chunks)} chunk files → {merged_path}")
@@ -150,9 +151,10 @@ def main():
 
     cluster = HTCondorCluster(
         cores=1,
-        memory="4GB",
+        memory="8GB",
         disk="10GB",
         log_directory=str(outdir / "logs"),
+        python="/afs/desy.de/user/k/kianianc/.conda/envs/hza_tagger/bin/python",
         # DESY NAF flavour — adjust for your site
         job_extra_directives={
             "+RequestRuntime": 3600,
