@@ -18,12 +18,14 @@ DESY NAF example
 The HTCondorCluster settings below are tuned for DESY NAF.
 Adjust memory/disk/cores for your site.
 """
-
 from __future__ import annotations
+
+import os
+# Tells HDF5 to ignore strict network filesystem locks for this merge process, suggested by Gemini
+os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
 import argparse
 import glob
-import os
 import sys
 from pathlib import Path
 
@@ -42,6 +44,10 @@ def parse_args():
 
 def convert_one_file(file_path: str, out_path: str, cfg: dict):
     """Worker function executed on the condor node."""
+    import os
+    # Tells HDF5 to ignore strict network filesystem locks for this merge process, suggested by Gemini
+    os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
+
     import warnings
     import awkward as ak
     import uproot
@@ -90,38 +96,52 @@ def merge_files(outdir: Path, merged_path: Path):
     """Concatenate per-file H5 chunks into a single file."""
     import h5py
     import numpy as np
+    import time
     from common.io import JETS_DATASET, TRACKS_DATASET, LABELS_DATASET
-	import time
-
+	
     chunks = sorted(outdir.glob("chunk_*.h5"))
     print(f"Merging {len(chunks)} chunk files → {merged_path}")
 
     with h5py.File(merged_path, "w") as fout:
         first = True
         for chunk_path in chunks:
+            
             # VIBECODED BLOCK START
+            
+            # ─── EXTRA CHECK: Skip if file is empty/corrupted at the OS level
+            #if not chunk_path.exists() or chunk_path.stat().st_size == 0:
+            #    print(f"Skipping corrupted/empty file (0 bytes): {chunk_path.name}")
+            #    continue
 			# ─── ADD RETRY LOGIC FOR NETWORK FILE LOCKS ──────────────────────
             fin = None
-            retries = 5
+            retries = 6
+            wait = 10
             while retries > 0:
                 try:
                     fin = h5py.File(chunk_path, "r")
                     break # Success! Break the retry loop
                 except (BlockingIOError, OSError):
                     retries -= 1
-                    print(f"File {chunk_path.name} is locked by network filesystem. Retrying in 2s... ({retries} left)")
-                    time.sleep(5)
+                    print(f"File {chunk_path.name} is locked by network filesystem. Retrying in {wait}s... ({retries} left)")
+                    time.sleep(wait)
             if fin is None:
-                raise RuntimeError(f"Could not open {chunk_path} after multiple retries due to network filesystem locks.")
+                print(f"WARNING: Skipping permanently dead/locked file: {chunk_path.name}")
+                continue
+                #raise RuntimeError(f"Could not open {chunk_path} after multiple retries due to network filesystem locks.")
             # ─────────────────────────────────────────────────────────────────
 
             try:
+                if JETS_DATASET not in fin:
+                    print(f"Skipping empty file: {chunk_path.name} (No jets passed selection)")
+                    continue
                 jets   = fin[JETS_DATASET][:]
                 tracks = fin[TRACKS_DATASET][:]
                 labels = fin[LABELS_DATASET][:]
             finally:
                 fin.close() # Always ensure it gets closed explicitly
-			# VIBECODED BLOCK END 
+			
+            # VIBECODED BLOCK END 
+            
             if first:
                 fout.create_dataset(JETS_DATASET,   data=jets,   maxshape=(None,),          compression="gzip")
                 fout.create_dataset(TRACKS_DATASET, data=tracks, maxshape=(None, tracks.shape[1]), compression="gzip")
@@ -190,6 +210,18 @@ def main():
     print(f"Submitted {len(futures)} jobs — watching …")
     client.gather(futures)
     print("All jobs complete.")
+
+	# ─── VIBECODED  COOLDOWN BLOCK ─────────────────────────────────────────────
+    import gc
+    import time
+    
+    print("Cleaning up Dask worker objects and flushing network filesystem buffers...")
+    del futures # Clear the memory tracking references to the worker nodes
+    gc.collect() # Force Python to run garbage collection immediately
+    
+    print("Waiting 10 seconds for cluster file handles to cleanly release...")
+    time.sleep(10) # Gives DESY AFS and Dask time to completely release file streams
+    # ─────────────────────────────────────────────────────────────────────────
 
     if args.merge:
         merge_files(outdir, outdir.parent / "merged.h5")
