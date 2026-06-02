@@ -16,12 +16,19 @@ JET_BRANCHES = [
     "Jet_puIdDisc",
     "Jet_nConstituents",
 ]
+# for signal, added under each branch so we only need one varibale.py file
+Jet = JET_BRANCHES
+JET_BRANCHES = Jet
+
 
 # Jet ↔ PFCand index branches (btvNanoAOD)
 JET_PFCAND_IDX_BRANCHES = [
     "JetPFCands_jetIdx",
     "JetPFCands_pFCandsIdx",
 ]
+# for sig
+JetPFCands = JET_PFCAND_IDX_BRANCHES
+JET_PFCAND_IDX_BRANCHES = JetPFCands
 
 # PFCand kinematic branches
 PFCAND_KIN_BRANCHES = [
@@ -33,7 +40,11 @@ PFCAND_KIN_BRANCHES = [
     "PFCands_pdgId",
     "PFCands_genCandIdx",   # index into GenCands (−1 = unmatched); absent in data → handled gracefully
 ]
+# for sig
+PFCAND_KIN_BRANCHES = PFCands
+PFCands = PFCAND_KIN_BRANCHES
 
+# not found in either signal or bkg files I was given
 # PFCand track / IP branches (may be absent in pheno nanos — handled gracefully)
 PFCAND_TRACK_BRANCHES = [
     "PFCands_dxy",
@@ -44,6 +55,7 @@ PFCAND_TRACK_BRANCHES = [
     "PFCands_puppiWeight",
 ]
 
+
 # GenJet branches (AK4, particle-level jets for truth_pt / truth_mass)
 GENJET_BRANCHES = [
     "GenJet_pt",
@@ -51,6 +63,9 @@ GENJET_BRANCHES = [
     "GenJet_phi",
     "GenJet_mass",
 ]
+# for sig
+GENJET_BRANCHES = GenJet
+GenJet = GENJET_BRANCHES
 
 # GenCands branches (truth particles matched 1-to-1 to PFCands; pheno nanos only)
 GENCANDS_BRANCHES = [
@@ -58,6 +73,9 @@ GENCANDS_BRANCHES = [
     "GenCands_isFromB",
     "GenCands_isFromC",
 ]
+# for sig
+GENCANDS_BRANCHES = GenCands
+GenCands = GENCANDS_BRANCHES
 
 # GenPart branches
 GENPART_BRANCHES = [
@@ -69,6 +87,9 @@ GENPART_BRANCHES = [
     "GenPart_genPartIdxMother",
     "GenPart_statusFlags",
 ]
+# for sig
+GENPART_BRANCHES = GenPart
+GenPart = GENPART_BRANCHES
 
 # ── Feature variable lists (used in SALT configs) ────────────────────────────
 

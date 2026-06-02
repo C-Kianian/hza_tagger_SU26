@@ -49,8 +49,6 @@ def convert_one_file(file_path: str, out_path: str, cfg: dict):
     from converter.processors.jet_dumper import process_events
     from converter.processors.writer import H5Writer
     from common.variables import REQUIRED_BRANCHES
-    # Comment out the above line and uncomment the below line when running on signal
-    # from common.variables_sig import REQUIRED_BRANCHES
 
 
     warnings.filterwarnings("ignore", message="Missing cross-reference index", category=RuntimeWarning)
@@ -151,8 +149,8 @@ def main():
 
     cluster = HTCondorCluster(
         cores=1,
-        memory="8GB",
-        disk="10GB",
+        memory="16GB",
+        disk="32GB",
         log_directory=str(outdir / "logs"),
         python="/afs/desy.de/user/k/kianianc/.conda/envs/hza_tagger/bin/python",
         # DESY NAF flavour — adjust for your site

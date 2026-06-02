@@ -33,8 +33,6 @@ warnings.filterwarnings("ignore", message="coffea.nanoevents.methods.vector will
 from converter.processors.jet_dumper import process_events
 from converter.processors.writer import H5Writer
 from common.variables import REQUIRED_BRANCHES
-# Comment out the above line and uncomment the below line when running on signal
-# from common.variables_sig import REQUIRED_BRANCHES
 
 
 def parse_args():

@@ -10,7 +10,6 @@ import numpy as np
 from common.io import JET_DTYPE, LABEL_DTYPE, TRACK_DTYPE, JETS_DATASET, TRACKS_DATASET, LABELS_DATASET
 from common.variables import N_TRACKS
 
-
 class H5Writer:
     """Incrementally writes structured arrays to an HDF5 file.
 
