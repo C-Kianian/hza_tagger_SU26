@@ -24,6 +24,11 @@ import os
 # Tells HDF5 to ignore strict network filesystem locks for this merge process, suggested by Gemini
 os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
+# ─── SILENCE COFFEA WARNINGS GLOBALLY AT LAUNCH ───────────────────────
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning, module="coffea.*")
+# ───────────────────────────────────────────────────────────────────────
+
 import argparse
 import glob
 import sys
@@ -58,7 +63,8 @@ def convert_one_file(file_path: str, out_path: str, cfg: dict):
 
 
     warnings.filterwarnings("ignore", message="Missing cross-reference index", category=RuntimeWarning)
-    warnings.filterwarnings("ignore", message="coffea.nanoevents.methods.vector will be removed", category=FutureWarning)
+    #warnings.filterwarnings("ignore", message="coffea.nanoevents.methods.vector will be removed", category=FutureWarning)
+    warnings.filterwarnings("ignore", category=FutureWarning, module="coffea.*") # the above misses the warning, so I added this
 
     schema_map = {"NanoAODSchema": NanoAODSchema, "PFNanoAODSchema": PFNanoAODSchema}
     schema     = schema_map.get(cfg.get("nano_schema", "NanoAODSchema"), NanoAODSchema)
@@ -91,6 +97,17 @@ def convert_one_file(file_path: str, out_path: str, cfg: dict):
     finally:
         writer.finalize()
 
+		# ────── VIBECODED: TELL AFS TO FLUSH METADATA BEFORE JOB CLOSES ──────
+        try:
+            import os
+            fd = os.open(out_path, os.O_RDONLY)
+            os.fsync(fd) # Forces the worker node to wait until the file is written to network disk
+            os.close(fd)
+        except Exception:
+            print(f"[WORKER WARNING]: fsync failed for {os.path.basename(out_path)}: {e}")
+            pass 
+        # ─────────────────────────────────────────────────────────────────────
+
 
 def merge_files(outdir: Path, merged_path: Path):
     """Concatenate per-file H5 chunks into a single file."""
@@ -105,13 +122,9 @@ def merge_files(outdir: Path, merged_path: Path):
     with h5py.File(merged_path, "w") as fout:
         first = True
         for chunk_path in chunks:
-            
+           
+            # ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
             # VIBECODED BLOCK START
-            
-            # ─── EXTRA CHECK: Skip if file is empty/corrupted at the OS level
-            #if not chunk_path.exists() or chunk_path.stat().st_size == 0:
-            #    print(f"Skipping corrupted/empty file (0 bytes): {chunk_path.name}")
-            #    continue
 			# ─── ADD RETRY LOGIC FOR NETWORK FILE LOCKS ──────────────────────
             fin = None
             retries = 6
@@ -120,16 +133,18 @@ def merge_files(outdir: Path, merged_path: Path):
                 try:
                     fin = h5py.File(chunk_path, "r")
                     break # Success! Break the retry loop
-                except (BlockingIOError, OSError):
+                except (BlockingIOError, OSError) as e:
                     retries -= 1
-                    print(f"File {chunk_path.name} is locked by network filesystem. Retrying in {wait}s... ({retries} left)")
+                    print(f"DEBUG [{chunk_path.name}]: {type(e).__name__} - {str(e)}")
+                    print(f"File {chunk_path.name} is inaccessible. Retrying in {wait}s... ({retries} left)")
                     time.sleep(wait)
             if fin is None:
                 print(f"WARNING: Skipping permanently dead/locked file: {chunk_path.name}")
                 continue
                 #raise RuntimeError(f"Could not open {chunk_path} after multiple retries due to network filesystem locks.")
             # ─────────────────────────────────────────────────────────────────
-
+            if retries != 6: print(f"------------------ File: {chunk_path.name} was released ------------------")
+            
             try:
                 if JETS_DATASET not in fin:
                     print(f"Skipping empty file: {chunk_path.name} (No jets passed selection)")
@@ -141,7 +156,8 @@ def merge_files(outdir: Path, merged_path: Path):
                 fin.close() # Always ensure it gets closed explicitly
 			
             # VIBECODED BLOCK END 
-            
+            # ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
             if first:
                 fout.create_dataset(JETS_DATASET,   data=jets,   maxshape=(None,),          compression="gzip")
                 fout.create_dataset(TRACKS_DATASET, data=tracks, maxshape=(None, tracks.shape[1]), compression="gzip")
@@ -160,7 +176,7 @@ def main():
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
 
-    # ───----- VIBECODED WILDCARD EXPANSION BLOCK ──────────────────────────────
+    #  ────────── VIBECODED WILDCARD EXPANSION BLOCK ───────────────────────────
     raw_files = cfg.get("files", [])
     expanded_files = []
     for path in raw_files:
@@ -225,6 +241,7 @@ def main():
 
     if args.merge:
         merge_files(outdir, outdir.parent / "merged.h5")
+        print("Done merging!")
 
 
 if __name__ == "__main__":
