@@ -44,6 +44,7 @@ def parse_args():
     p.add_argument("--outdir", required=True, help="Directory for per-file H5 outputs")
     p.add_argument("--merge", action="store_true", help="Merge chunk files after all jobs complete")
     p.add_argument("--max-workers", type=int, default=20)
+    p.add_argument("--name", type=str, default="")
     return p.parse_args()
 
 
@@ -205,7 +206,7 @@ def main():
     cluster = HTCondorCluster(
         cores=1,
         memory="16GB",
-        disk="32GB",
+        disk="16GB",
         log_directory=str(outdir / "logs"),
         python="/afs/desy.de/user/k/kianianc/.conda/envs/hza_tagger/bin/python",
         # DESY NAF flavour — adjust for your site
@@ -216,10 +217,11 @@ def main():
     )
     cluster.scale(min(args.max_workers, len(cfg["files"])))
     client = Client(cluster)
-
+    
+    n = args.name
     futures = []
     for i, file_path in enumerate(cfg["files"]):
-        out_path = str(outdir / f"chunk_{i:04d}.h5")
+        out_path = str(outdir / f"chunk_{n}_{i:04d}.h5")
         fut = client.submit(convert_one_file, file_path, out_path, cfg)
         futures.append(fut)
 
@@ -240,7 +242,7 @@ def main():
     # ─────────────────────────────────────────────────────────────────────────
 
     if args.merge:
-        merge_files(outdir, outdir.parent / "merged.h5")
+        merge_files(outdir, outdir.parent / f"merged_{n}.h5")
         print("Done merging!")
 
 
