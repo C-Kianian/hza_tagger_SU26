@@ -32,6 +32,8 @@ warnings.filterwarnings("ignore", category=FutureWarning, module="coffea.*")
 import argparse
 import glob
 import sys
+import gc
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -98,16 +100,14 @@ def convert_one_file(file_path: str, out_path: str, cfg: dict):
     finally:
         writer.finalize()
 
-		# ────── VIBECODED: TELL AFS TO FLUSH METADATA BEFORE JOB CLOSES ──────
+        # flush data before job closes, prevents files from appearing to be processing
         try:
-            import os
             fd = os.open(out_path, os.O_RDONLY)
             os.fsync(fd) # Forces the worker node to wait until the file is written to network disk
             os.close(fd)
         except Exception:
             print(f"[WORKER WARNING]: fsync failed for {os.path.basename(out_path)}: {e}")
             pass 
-        # ─────────────────────────────────────────────────────────────────────
 
 
 def merge_files(outdir: Path, merged_path: Path):
@@ -124,9 +124,7 @@ def merge_files(outdir: Path, merged_path: Path):
         first = True
         for chunk_path in chunks:
            
-            # ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-            # VIBECODED BLOCK START
-			# ─── ADD RETRY LOGIC FOR NETWORK FILE LOCKS ──────────────────────
+            # if a file is locked/still processing wait and retry 
             fin = None
             retries = 6
             wait = 10
@@ -141,11 +139,10 @@ def merge_files(outdir: Path, merged_path: Path):
                     time.sleep(wait)
             if fin is None:
                 print(f"WARNING: Skipping permanently dead/locked file: {chunk_path.name}")
-                continue
-                #raise RuntimeError(f"Could not open {chunk_path} after multiple retries due to network filesystem locks.")
-            # ─────────────────────────────────────────────────────────────────
+                continue 
             if retries != 6: print(f"------------------ File: {chunk_path.name} was released ------------------")
             
+            # write to collections
             try:
                 if JETS_DATASET not in fin:
                     print(f"Skipping empty file: {chunk_path.name} (No jets passed selection)")
@@ -156,9 +153,8 @@ def merge_files(outdir: Path, merged_path: Path):
             finally:
                 fin.close() # Always ensure it gets closed explicitly
 			
-            # VIBECODED BLOCK END 
-            # ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
+            # write collections to file
             if first:
                 fout.create_dataset(JETS_DATASET,   data=jets,   maxshape=(None,),          compression="gzip")
                 fout.create_dataset(TRACKS_DATASET, data=tracks, maxshape=(None, tracks.shape[1]), compression="gzip")
@@ -177,7 +173,7 @@ def main():
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
 
-    #  ────────── VIBECODED WILDCARD EXPANSION BLOCK ───────────────────────────
+    # wildcard input expansion
     raw_files = cfg.get("files", [])
     expanded_files = []
     for path in raw_files:
@@ -193,9 +189,9 @@ def main():
         )
     
     cfg["files"] = expanded_files
-    # ─────────────────────────────────────────────────────────────────────────
 
 
+    # ensure condor can run
     try:
         from dask_jobqueue import HTCondorCluster
         from dask.distributed import Client
@@ -203,6 +199,7 @@ def main():
         print("dask-jobqueue not installed.  Run: pip install dask dask-jobqueue")
         sys.exit(1)
 
+    # worker requirements
     cluster = HTCondorCluster(
         cores=1,
         memory="16GB",
@@ -229,18 +226,16 @@ def main():
     client.gather(futures)
     print("All jobs complete.")
 
-	# ─── VIBECODED  COOLDOWN BLOCK ─────────────────────────────────────────────
-    import gc
-    import time
     
+    # cooldown block
     print("Cleaning up Dask worker objects and flushing network filesystem buffers...")
     del futures # Clear the memory tracking references to the worker nodes
     gc.collect() # Force Python to run garbage collection immediately
     
     print("Waiting 10 seconds for cluster file handles to cleanly release...")
-    time.sleep(10) # Gives DESY AFS and Dask time to completely release file streams
-    # ─────────────────────────────────────────────────────────────────────────
+    time.sleep(10) # Gives DESY AFS and Dask time to release file streams
 
+    # merge chunks 
     if args.merge:
         merge_files(outdir, outdir.parent / f"merged{n}.h5")
         print("Done merging!")
