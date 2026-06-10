@@ -2,9 +2,7 @@ import h5py
 import numpy as np
 import matplotlib.pyplot as plt
 import mplhep as hep
-import hist
 import gc
-import math
 from argparse import ArgumentParser
 
 hep.style.use("CMS")
@@ -15,7 +13,7 @@ parser.add_argument('--maxEvents', type=int, default=None, help='max amount of e
 parser.add_argument('--plot', type=bool, default=False, help='set true for all the plots to be made')
 args = parser.parse_args()
 
-# get file path and setup histogram tracker
+# get file path and set up histogram tracker
 FILE = args.file
 MAX_EVENTS = args.maxEvents
 PLOT = args.plot
@@ -23,7 +21,7 @@ hists = []
 
 def print_val(file):
     # display the content of the file
-    def print_keys(name, obj):
+    def print_keys(name):
         print(name)
     file.visititems(print_keys) # https://docs.h5py.org/en/stable/high/group.html#h5py.Group.visititems
 
@@ -39,59 +37,110 @@ def print_val(file):
     print("Tracks dtype:", tracks.dtype)
     gc.collect()
 
-def plot_hist(sig, bkg, x, name, binSize = 1.0, y="Entries", norm=False, logy=False, logx=False):
+def calculate_bin_edges(sig, bkg, n_bins_float=50):
+    """
+    Vibecoded:
+    Generates robust bin edges for both discrete and continuous HEP variables.
+    """
+    # Combine to find the shared data envelope
+    comb = np.concatenate([sig, bkg])
+
+    # 1. Safely check if the array contains integers (handles np.int32, np.int64)
+    is_discrete = np.issubdtype(comb.dtype, np.integer)
+
+    if is_discrete:
+        # For discrete variables (pdgId, charge, trkQuality), we want bins
+        # centered exactly on the integers.
+        ll = np.min(comb)
+        ul = np.max(comb)
+        bins = int(ul - ll + 1)
+        # Shift edges by 0.5 so integer values fall in the center of the bin
+        bin_edges = np.linspace(ll - 0.5, ul + 0.5, bins + 1)
+        return bin_edges
+
+    # 2. For continuous variables (pt, eta, phi, mass, etc.)
+    # Use percentiles to ignore massive outliers that squash the histogram
+    ll = np.percentile(comb, 0.2)
+    ul = np.percentile(comb, 99.8)
+
+    if ul == ll:  # Fallback if percentiles are identical (e.g., very sparse data)
+        ll, ul = np.min(comb), np.max(comb)
+
+    # 3. Apply a 5% margin based on the *total range*, not the absolute value
+    padding = (ul - ll) * 0.05
+    ll -= padding
+    ul += padding
+
+    if ul == ll:  # Extreme edge case: all values are identical and 0
+        ul += 0.01
+        ll -= 0.01
+
+    # 4. Prevent purely positive variables (pt, mass) from dipping below 0 due to padding
+    if np.min(comb) >= 0 and ll < 0:
+        ll = 0.0
+
+    # Generate the final edges
+    bin_edges = np.linspace(ll, ul, n_bins_float + 1)
+
+    return bin_edges
+
+def plot_hist(sig, bkg, x, name, truth=None, y="Entries", norm=False, logy=False, logx=False):
     # quick check
     if len(sig) == 0 or len(bkg) == 0:
         raise ValueError(f"Sig or bkg is empty for {name}")
 
-    # upper and lower limits
-    ll = min(0, np.min(sig), np.min(bkg))
-    ul = max(np.max(sig), np.max(bkg))
-    # zoom out a little
-    if ll < 0: ll = ll - (ll * 0.05)
-    ul = ul + (ul * 0.05)
-    if ul == ll == 0: 
-        ul += 0.1
-        ll -= 0.1
+    length_truth = len(truth) if truth is not None else 0
 
-    bins = max(1, int(np.ceil((ul - ll) / binSize))) # calc the number of bins
+    bin_edges = calculate_bin_edges(sig, bkg, n_bins_float=50)
 
     # hists for sig and bkg
-    h_sig = hist.Hist(hist.axis.Regular(bins, ll, ul, label=x))
-    h_bkg = hist.Hist(hist.axis.Regular(bins, ll, ul, label=x))
-    h_sig.fill(sig)
-    h_bkg.fill(bkg)
+    h_sig, _ = np.histogram(sig, bins=bin_edges)
+    h_bkg, _ = np.histogram(bkg, bins=bin_edges)
+    # hists for truth
+    truth_hists = []
+    for i in range(length_truth):
+        h, _ = np.histogram(truth[i], bins=bin_edges)
+        truth_hists.append(h)
+
 
     # norm if specified
     if norm:
         y = "Normalised entries"
         h_sig = h_sig / h_sig.sum()
         h_bkg = h_bkg / h_bkg.sum()
+        # norm truth
+        for i in range(length_truth):
+            truth_hists[i] = truth_hists[i] / truth_hists[i].sum()
 
     # plot the overlaid hist
     fig, ax = plt.subplots()
     if logy: ax.set_yscale("log") # log if specified
     if logx: ax.set_xscale("log")
-    hep.histplot(h_sig, ax=ax, label=f"Signal (a-jet, N={len(sig)})", color="tab:red")
-    hep.histplot(h_bkg, ax=ax, label=f"Background (N={len(bkg)})", color="tab:blue", linestyle="--")
+    hep.histplot(h_sig, bins=bin_edges, ax=ax, label=f"Signal (a-jet, N={len(sig)})", color="tab:red", flow="show")
+    hep.histplot(h_bkg, bins=bin_edges, ax=ax, label=f"Background (N={len(bkg)})", color="tab:blue", linestyle="--", flow="show")
     ax.set_xlabel(x)
     ax.set_ylabel(y)
     ax.legend()
     hep.cms.label("Preliminary", data=False, ax=ax, com=13.6)
     plt.tight_layout()
-
-    # save as pdf output
+    # save as PDF output
     fig.savefig(f"{name}.pdf", bbox_inches="tight")
+    print(f"Finished plot: {name}")
 
     plt.close(fig)
-
 
 def main():
     with h5py.File(FILE, "r") as f:
         # print the file content
+        print("===============================================================================================")
+        print("File info:")
+        print("===============================================================================================")
         print_val(f)
 
         if PLOT:
+            print("===============================================================================================")
+            print("Plots (Signal vs Background):")
+            print("===============================================================================================")
             # get jet track info for analysis
             idx = slice(None) if MAX_EVENTS is None else slice(0, MAX_EVENTS)
 
@@ -99,25 +148,25 @@ def main():
             tracks = f["tracks"][idx]
             labels = f["labels"]["a_jet"][idx] # 1 = signal (a-jet), 0 = background
 
-            # x axis latex and names for each var, jets and tracks
+            # x-axis latex and names for each var, jets and tracks
             jet_labels = {
-                "pt": r"$p_{T}^{\mathrm{jet}}$",
-                "eta":  r"$\eta$",
-                "phi":  r"$\phi$",
-                "mass": "$m$",
+                "pt": r"$p_{T}^{\mathrm{jet}} [GeV/c]$",
+                "eta":  r"$\eta^{jet}$",
+                "phi":  r"$\phi^{jet}$",
+                "mass": "$m^{jet} [GeV/c^{2}]$",
             }
 
             trk_labels = {
-                "pt": r"$p_T^{\mathrm{track}}$",
-                "eta_rel": r"$\eta_{\mathrm{rel}}$",
-                "phi_rel": r"$\phi_{\mathrm{rel}}$",
-                "mass": r"$m$",
+                "pt": r"$p_T^{\mathrm{track}} [GeV/c]$",
+                "eta_rel": r"$\eta_{\mathrm{rel}}^{\mathrm{track}}$",
+                "phi_rel": r"$\phi_{\mathrm{rel}}^{\mathrm{track}}$",
+                "mass": r"$m^{track} [GeV/c^{2}]$",
                 "charge": "Charge",
                 'pdgId': "PDG Id",
                 'dxy': r"$\Delta xy$",
                 'dz': r"$\Delta z$",
-                'dxySig': r"$\Delta xy \mathrm{Z}$",
-                'dzSig': r"$\Delta z \mathrm{Z}$",
+                'dxySig': r"$\delta xy \mathrm{Z}$",
+                'dzSig': r"$\delta z \mathrm{Z}$",
                 'trkQuality': "Track quality",
                 'puppiWeight': "PUPPI weight",
             }
@@ -160,14 +209,13 @@ def main():
             ############ MULTIPLICITY INFO ###########
 
             # track multiplicity
-            trk_valid = trk_valid = tracks['valid']
+            trk_valid = tracks['valid']
 
             multi = trk_valid.sum(axis=1)
             sig_trk_multi = multi[labels == 1]
             bkg_trk_multi = multi[labels == 0]
 
             plot_hist(sig_trk_multi, bkg_trk_multi, x="Track multiplicity", name="trk_multi", norm=True)
-
 
             ############ (RELATIVE) SUB AND LEADING INFO ###########
             # get valid track pt values
@@ -184,9 +232,9 @@ def main():
             is_sig = labels == 1 # signal mask
 
             # plot lead, sub, and sum pts
-            plot_hist(lead_pt[is_sig], lead_pt[~is_sig], x=r"$p_T^{\mathrm{leading\ track}}$", name="trk_lead_pT", norm=True)
-            plot_hist(sublead_pt[is_sig], sublead_pt[~is_sig], x=r"$p_T^{\mathrm{sub-leading\ track}}$", name="trk_sub_lead_pT", norm=True)
-            plot_hist(sum_pt[is_sig], sum_pt[~is_sig], x=r"$\sum p_T^{\mathrm{track}}$", name="trk_sum_pT", norm=True)
+            plot_hist(lead_pt[is_sig], lead_pt[~is_sig], x=r"$p_T^{\mathrm{leading\ track}}$", name="trk_lead_pt", norm=True)
+            plot_hist(sublead_pt[is_sig], sublead_pt[~is_sig], x=r"$p_T^{\mathrm{sub-leading\ track}}$", name="trk_sub_lead_pt", norm=True)
+            plot_hist(sum_pt[is_sig], sum_pt[~is_sig], x=r"$\sum p_T^{\mathrm{track}}$", name="trk_sum_pt", norm=True)
 
             jet_pt = jets["pt"]
 
@@ -195,9 +243,9 @@ def main():
             rel_sum_pt = sum_pt / jet_pt
 
             # plots lead and sub lead wrt jet pt
-            plot_hist(rel_lead_pt[is_sig], rel_lead_pt[~is_sig], x=r"$p_T^{\mathrm{leading\ track}} / p_T^{\mathrm{jet}}$", name="trk_rel_lead_pT", norm=True)
-            plot_hist(rel_sublead_pt[is_sig], rel_sublead_pt[~is_sig], x=r"$p_T^{\mathrm{sub-leading\ track}} / p_T^{\mathrm{jet}}$", name="trk_rel_sub_lead_pT", norm=True)
-            plot_hist(rel_sum_pt[is_sig], rel_sum_pt[~is_sig], x=r"$\sum p_T^{\mathrm{track}} / p_T^{\mathrm{jet}}$", name="trk_rel_sum_pT", norm=True)
+            plot_hist(rel_lead_pt[is_sig], rel_lead_pt[~is_sig], x=r"$p_T^{\mathrm{leading\ track}} / p_T^{\mathrm{jet}}$", name="trk_rel_lead_pt", norm=True)
+            plot_hist(rel_sublead_pt[is_sig], rel_sublead_pt[~is_sig], x=r"$p_T^{\mathrm{sub-leading\ track}} / p_T^{\mathrm{jet}}$", name="trk_rel_sub_lead_pt", norm=True)
+            plot_hist(rel_sum_pt[is_sig], rel_sum_pt[~is_sig], x=r"$\sum p_T^{\mathrm{track}} / p_T^{\mathrm{jet}}$", name="trk_rel_sum_pt", norm=True)
 
             ############ DELTA R INFO ###########
             dR = np.sqrt(
@@ -216,8 +264,8 @@ def main():
             sig_max_dR = max_dR[labels == 1]
             bkg_max_dR = max_dR[labels == 0]
 
-            plot_hist(sig_mean_dR, bkg_mean_dR, x=r"$\Delta R$", name="trk_dR", norm=True)
-            plot_hist(sig_max_dR, bkg_max_dR, x=r"$\Delta R$", name="trk_dR_max", norm=True)
+            plot_hist(sig_mean_dR, bkg_mean_dR, x=r"Mean $\Delta R$", name="trk_dR_mean", norm=True)
+            plot_hist(sig_max_dR, bkg_max_dR, x=r"Max $\Delta R$", name="trk_dR_max", norm=True)
 
 
 
