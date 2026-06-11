@@ -133,6 +133,36 @@ def main():
     plt.close(fig)
     print("Saved eff_vs_pt.pdf")
 
+    # ── Efficiency vs eta ────────────────────────────────────────────────────
+    wp_main = args.wp[0]
+    idx_wp  = np.searchsorted(tpr, wp_main)
+    cut     = thr[idx_wp] if idx_wp < len(thr) else 0.5
+
+    eta_bins  = np.array([-2.5, -2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0, 2.5])
+    eta_cents = 0.5 * (eta_bins[:-1] + eta_bins[1:])
+    sig_eff  = []
+    bkg_eff  = []
+
+    for lo, hi in zip(eta_bins[:-1], eta_bins[1:]):
+        mask_s = sig & (eta >= lo) & (eta < hi)
+        mask_b = bkg & (eta >= lo) & (eta < hi)
+        sig_eff.append(np.mean(scores[mask_s] > cut) if mask_s.sum() else np.nan)
+        bkg_eff.append(np.mean(scores[mask_b] > cut) if mask_b.sum() else np.nan)
+
+    fig, ax = plt.subplots()
+    ax.plot(eta_cents, sig_eff, "o-", label="Signal efficiency")
+    ax.plot(eta_cents, bkg_eff, "s--", label="Background efficiency")
+    ax.axhline(wp_main, ls=":", color="grey", label=f"Target sig eff {wp_main:.0%}")
+    ax.set_xlabel("Jet $\eta$")
+    ax.set_ylabel("Efficiency")
+    ax.set_ylim(0, 1)
+    ax.legend()
+    ax.set_title(f"Efficiency vs $\eta$ (cut at WP {wp_main:.0%})")
+    fig.savefig(outdir / "eff_vs_eta.pdf", bbox_inches="tight")
+    plt.close(fig)
+    print("Saved eff_vs_eta.pdf")
+
+
 
 if __name__ == "__main__":
     main()

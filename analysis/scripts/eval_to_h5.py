@@ -83,18 +83,39 @@ def main():
             tracks_batch = fin[TRACKS_DATASET][start:stop]
 
             # ── Jets: drop a_jet label, keep only kinematic input features ────
-            jet_input_fields = [f for f in jets_batch.dtype.names if f != "a_jet"]
-            jets_np = np.stack([jets_batch[f] for f in jet_input_fields], axis=-1).astype(np.float32)
-            jets_t  = torch.from_numpy(jets_np).to(device)           # (B, n_jet_vars)
+            #jet_input_fields = [f for f in jets_batch.dtype.names if f != "a_jet"]
+            #jets_np = np.stack([jets_batch[f] for f in jet_input_fields], axis=-1).astype(np.float32)
+            #jets_t  = torch.from_numpy(jets_np).to(device)           # (B, n_jet_vars)
 
             # ── Tracks ────────────────────────────────────────────────────────
-            track_input_fields = [f for f in tracks_batch.dtype.names if f != "valid"]
+            #track_input_fields = [f for f in tracks_batch.dtype.names if f != "valid"]
+            #tracks_np = np.stack(
+            #    [tracks_batch[f].astype(np.float32) for f in track_input_fields], axis=-1
+            #)                                                         # (B, T, n_track_vars)
+            #tracks_t  = torch.from_numpy(tracks_np).to(device)
+            #valid_t   = torch.from_numpy(tracks_batch["valid"]).to(device)  # (B, T) bool
+            #pad_mask  = ~valid_t                                      # True = padded
+
+
+            # ======================= VIBECODED FIX ==========================
+            # ── Jets: Explicitly select the 4 features the model expects ────
+            jet_input_fields = ["pt", "eta", "phi", "mass"]
+            jets_np = np.stack([jets_batch[f] for f in jet_input_fields], axis=-1).astype(np.float32)
+            jets_t  = torch.from_numpy(jets_np).to(device)           # (B, 4)
+
+            # ── Tracks: Explicitly select the features used during training ──
+            # (Explicitly listing these prevents a secondary crash if your track dataset has extra fields)
+            track_input_fields = [
+                "pt", "eta_rel", "phi_rel", "mass", "charge", 
+                "pdgId", "dxy", "dz", "dxySig", "dzSig", 
+                "trkQuality", "puppiWeight"
+            ]
             tracks_np = np.stack(
                 [tracks_batch[f].astype(np.float32) for f in track_input_fields], axis=-1
-            )                                                         # (B, T, n_track_vars)
+            )                                                                 # (B, T, n_track_vars)
             tracks_t  = torch.from_numpy(tracks_np).to(device)
             valid_t   = torch.from_numpy(tracks_batch["valid"]).to(device)  # (B, T) bool
-            pad_mask  = ~valid_t                                      # True = padded
+            pad_mask  = ~valid_t                                              # True = padded
 
             # ── Forward pass ─────────────────────────────────────────────────
             # SALT 0.11 ModelWrapper.forward(inputs, pad_masks) → (preds, loss, ...)
