@@ -69,6 +69,21 @@ else
     TEST_FILE="$(_pick_h5  "${TEST_FILE:-}"  data/test.h5  data/test_out.h5)"
 fi
 
+# ── Clean file args before passing to salt ────────────────────────────────────
+if [[ -n "${1:-}" && "${1}" != --* ]]; then
+    # Positional args detected
+    TRAIN_FILE="${1}"
+    VAL_FILE="${2:-${1}}"
+    TEST_FILE="${3:-${1}}"
+    
+    # SHIFT REMOVES THESE FROM "$@" SO SALT DOESN'T SEE THEM AGAIN
+    shift 3 
+else
+    TRAIN_FILE="$(_pick_h5 "${TRAIN_FILE:-}" data/train.h5 data/test_out.h5)"
+    VAL_FILE="$(_pick_h5   "${VAL_FILE:-}"   data/val.h5   data/test_out.h5)"
+    TEST_FILE="$(_pick_h5  "${TEST_FILE:-}"  data/test.h5  data/test_out.h5)"
+fi
+
 NAME=hza_tagger_$(date +%Y%m%d_%H%M%S)
 
 info "Config:     ${CONFIG}"
