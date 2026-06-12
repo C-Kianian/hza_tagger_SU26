@@ -60,9 +60,9 @@ model:
                   activation: *activation
 
 data:
-  train_file: data/train.h5
-  val_file:   data/val.h5
-  test_file:  data/test.h5
+  train_file: path/to/train/file
+  val_file:   path/to/val/file
+  test_file:  path/to/test/file
 
   norm_dict:  tagger/configs/norm_dict.yaml
   class_dict: null  # disable — inherited EOS path from salt/configs/base.yaml is not accessible
@@ -125,6 +125,13 @@ trainer:
     - class_path: salt.callbacks.Checkpoint
       init_args:
         monitor_loss: val/jets_classification_loss
+    - class_path: lightning.pytorch.callbacks.EarlyStopping
+      init_args:
+        monitor: val/jets_classification_loss
+        mode: min
+        patience: 10
+        min_delta: 0.0001
+        verbose: true
     - class_path: lightning.pytorch.callbacks.LearningRateMonitor
     - class_path: lightning.pytorch.callbacks.TQDMProgressBar
       init_args: { refresh_rate: 50 }
