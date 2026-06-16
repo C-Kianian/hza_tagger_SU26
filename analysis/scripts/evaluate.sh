@@ -5,10 +5,12 @@
 # variables below via environment variables or positional arguments.
 #
 # Usage
-# -----
-#   bash analysis/scripts/evaluate.sh                     # auto-discover everything
-#   bash analysis/scripts/evaluate.sh data/test.h5        # explicit test file
-#   bash analysis/scripts/evaluate.sh data/test.h5 logs/my_run/checkpoints/best.ckpt
+#   evaluate.sh [TEST_FILE] [CKPT] [--run RUN_NAME]
+#
+# Examples
+#   evaluate.sh --run my_training_run 
+#   evaluate.sh data/test.h5 --run my_training_run
+#   evaluate.sh data/test.h5 logs/my_run/ckpts/best.ckpt
 #
 # Environment overrides (all optional):
 #   TEST_FILE    path to input test H5
@@ -23,6 +25,26 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "${PROJECT_ROOT}"
+
+# add arg for which sub dir of logs to search for model checkpoint
+RUN="${RUN:-}"
+
+POSITIONAL=()
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --run)
+            RUN="$2"
+            shift 2
+            ;;
+        *)
+            POSITIONAL+=("$1")
+            shift
+            ;;
+    esac
+done
+
+set -- "${POSITIONAL[@]}"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 die()  { echo "ERROR: $*" >&2; exit 1; }
@@ -57,6 +79,11 @@ fi
 info "Test file:  ${TEST_FILE}"
 
 # ── Resolve CKPT ──────────────────────────────────────────────────────────────
+if [[ -n "${RUN}" ]]; then
+    [[ -d "logs/${RUN}" ]] || die "Run not found: logs/${RUN}"
+    info "Run:        ${RUN}"
+fi
+
 if [[ -n "${2:-}" ]]; then
     CKPT="${2}"
 elif [[ -z "${CKPT:-}" ]]; then
@@ -64,11 +91,11 @@ elif [[ -z "${CKPT:-}" ]]; then
     # Pick the checkpoint with the lowest val_loss by parsing the filename.
     # Also handles the conventional best.ckpt name for other SALT versions.
     _best_by_loss() {
-        # list all ckpts across all runs, extract val_loss from filename, sort numerically
-        ls -1 logs/*/ckpts/*.ckpt logs/*/*/version_*/ckpts/*.ckpt logs/*/checkpoints/best.ckpt 2>/dev/null \
+        local r="${RUN:-*}"
+        ls -1 logs/${r}/ckpts/*.ckpt logs/${r}/*/version_*/ckpts/*.ckpt logs/${r}/checkpoints/best.ckpt 2>/dev/null \
             | awk -F'val_loss=' '
                 NF==2 { val=$2; sub(/\.ckpt$/,"",val); print val, $0 }
-                NF==1 { print "best", $0 }   # best.ckpt has no loss in name
+                NF==1 { print "best", $0 }
               ' \
             | sort -n \
             | head -1 \
@@ -89,7 +116,8 @@ info "Config:     ${TRAIN_CFG}"
 _base="$(basename "${TEST_FILE}" .h5)"
 _dir="$(dirname "${TEST_FILE}")"
 SCORES_FILE="${SCORES_FILE:-${_dir}/${_base}_scores.h5}"
-PLOT_DIR="${PLOT_DIR:-analysis/plots}"
+#PLOT_DIR="${PLOT_DIR:-analysis/plots}"
+PLOT_DIR="${PLOT_DIR:-analysis/plots${RUN:+_${RUN}}}"
 
 info "Scores:     ${SCORES_FILE}"
 info "Plots dir:  ${PLOT_DIR}"
