@@ -13,6 +13,9 @@
 # Usage:
 #   bash tagger/scripts/train.sh                          # auto-discover everything
 #   bash tagger/scripts/train.sh data/train.h5 data/val.h5 data/test.h5
+#   bash tagger/scripts/train.sh --rw 			 # auto reweight a classification task
+#   bash tagger/scripts/train.sh --mass=4_0 	 	 # for a specific mass norm dict, default is 2_0
+#   bash tagger/scripts/train.sh --rename=some_name_here # the name to rename the standard hza_tagger_YMD_HMS out directory
 #
 # Environment overrides:
 #   TRAIN_FILE, VAL_FILE, TEST_FILE   explicit H5 paths
@@ -22,6 +25,31 @@ set -euo pipefail
 
 die()  { echo "ERROR: $*" >&2; exit 1; }
 info() { echo "[train] $*"; }
+
+# Resolve Python from the active conda env
+PYTHON="${CONDA_PREFIX:+${CONDA_PREFIX}/bin/python}"
+PYTHON="${PYTHON:-$(command -v python3 2>/dev/null || command -v python)}"
+
+# == get args ================================================================
+MASS=""
+ADD_NAME=""
+RW=false # to reweight
+
+POSITIONAL=()
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --mass=*)     MASS="${1#*=}" ;;
+        --rename=*)  RENAME="${1#*=}" ;;
+        --rw)         RW=true ;;
+        *)
+            POSITIONAL+=("$1")
+            ;;
+    esac
+    shift
+done
+
+set -- "${POSITIONAL[@]}"
 
 # ── Load secrets from .env if present ────────────────────────────────────────
 if [[ -f ".env" ]]; then
@@ -84,13 +112,34 @@ else
     TEST_FILE="$(_pick_h5  "${TEST_FILE:-}"  data/test.h5  data/test_out.h5)"
 fi
 
+# == reweighting =================================================================
+if [[ "$RW" == true ]]; then    
+    echo "==> Computing reweighting from ${TRAIN_FILE} …"
+    read -r W_BKG W_SIG < <("${PYTHON}" tagger/scripts/calc_reweight_vals.py --file "${TRAIN_FILE}")
+else
+    W_BKG=1.0
+    W_SIG=1.0
+fi
+echo "Background rw: ${W_BKG}, signal rw: ${W_SIG}"
+EXTRA_LOSS_ARGS="--model.model.init_args.tasks.init_args.modules.init_args.loss.init_args.weight=[${W_BKG},${W_SIG}]"
+
+
+# == norm dict =================================================================
+MASS="${MASS:-}"
+if [[ -n "$MASS" ]]; then
+    NORM_DICT="tagger/configs/norm_dict_mA${MASS}.yaml"
+else
+    NORM_DICT="tagger/configs/norm_dict.yaml"
+fi
 NAME=hza_tagger_$(date +%Y%m%d_%H%M%S)
+EXTRA_DATA_ARGS="--data.norm_dict ${NORM_DICT}"
 
 info "Config:     ${CONFIG}"
 info "Train file: ${TRAIN_FILE}"
 info "Val file:   ${VAL_FILE}"
 info "Test file:  ${TEST_FILE}"
 info "Run name:   ${NAME}"
+info "Norm dict:  ${NORM_DICT}"
 echo ""
 
 echo "==> Starting training: ${NAME}"
@@ -102,6 +151,33 @@ salt fit \
     --data.test_file  "${TEST_FILE}" \
     --trainer.logger.init_args.experiment_name "${NAME}" \
     ${EXTRA_LOGGER_ARGS} \
+    ${EXTRA_LOSS_ARGS} \
+    ${EXTRA_DATA_ARGS} \
     --force \
     "$@"
 
+
+# 1. Capture the exit code of the training process
+TRAIN_STATUS=$?
+
+# 2. Find the most recently modified directory matching the lightning pattern
+LATEST_DIR=$(ls -td logs/hza_tagger_* 2>/dev/null | head -n 1)
+
+# 3. Rename it to your specified $NAME variable
+if [[ -d "$LATEST_DIR" && "$LATEST_DIR" != "logs/${RENAME}" ]]; then
+    echo "==> Clean up: Moving output directory to logs/${RENAME}"
+
+    # Safety check: if target directory exists, append a small safety flag
+    if [[ -d "logs/${RENAME}" ]]; then
+        SAFE_NAME="logs/${RENAME}_fallback_$(date +%H%M%S)"
+        echo "    [Warning] logs/${RENAME} already exists! Saving to ${SAFE_NAME} instead."
+        mv "$LATEST_DIR" "$SAFE_NAME"
+    else
+        mv "$LATEST_DIR" "logs/${RENAME}"
+    fi
+else
+    echo "==> Clean up: No matching timestamped directory found to rename."
+fi
+
+# 4. Exit with the original training status so batch scripts know if it failed
+exit $TRAIN_STATUS

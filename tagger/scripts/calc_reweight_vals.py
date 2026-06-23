@@ -13,11 +13,12 @@ def calculate_reweight_vals(sig, bkg):
     N_events = n_sig + n_bkg
 
     # calc reweight vals
-    w_bg  = N_events/(2 * n_bkg)
+    w_bkg  = N_events/(2 * n_bkg)
     w_sig = N_events/(2 * n_sig)
-    print("===============================================================================================")
-    print(f"Reweight Values [Background, Signal]: [{w_bg:.2f},{w_sig:.2f}]")
-    print("===============================================================================================")
+    #print("===============================================================================================")
+    #print(f"Reweight Values [Background, Signal]: [{w_bkg:.2f},{w_sig:.2f}]")
+    #print("===============================================================================================")
+    return w_bkg, w_sig
 
 def main():
     with h5py.File(FILE, 'r') as f:
@@ -27,7 +28,8 @@ def main():
         # calc reweight vals
         sig_jets = f["jets"][is_sig]
         bkg_jets = f["jets"][~is_sig]
-        calculate_reweight_vals(sig_jets, bkg_jets)
+        w_bkg, w_sig = calculate_reweight_vals(sig_jets, bkg_jets)
+        print(f"{w_bkg} {w_sig}")
 
 if __name__ == '__main__':
     main()

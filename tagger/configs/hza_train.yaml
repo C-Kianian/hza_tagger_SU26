@@ -54,7 +54,7 @@ model:
                 loss:
                   class_path: torch.nn.CrossEntropyLoss
                   init_args:
-                    weight: [0.53,7.92] # ADD REWEIGHTING HERE [BKG,SIG]
+                    weight: [1.0,1.0] # ADD REWEIGHTING HERE [BKG,SIG]
                 dense_config:
                   input_size: *out_dim
                   output_size: 2
