@@ -216,6 +216,7 @@ def main():
     client = Client(cluster)
     
     n = args.name
+    if n != '': n = '_' + n
     futures = []
     for i, file_path in enumerate(cfg["files"]):
         out_path = str(outdir / f"chunk{n}_{i:04d}.h5")

@@ -95,6 +95,10 @@ def process_events(events) -> dict[str, np.ndarray]:
     )
     labels_sel      = _flat(truth["labels"][sel]).astype(np.int32)
     truth_amass_sel = _flat(truth["truth_a_mass"][sel]).astype(np.float32)
+    failed_dau_dr_sel = _flat(truth["failed_dau_dr"][sel]).astype(np.float32)
+    n_dau_failed_sel = _flat(truth["n_dau_failed"][sel]).astype(np.int32)
+    n_dau_sel = _flat(truth["n_dau"][sel]).astype(np.int32)
+
 
     # ── 2b. GenJet dR-matching → truth_pt and truth_mass ────────────────────
     # Match each selected reco jet to the nearest GenJet within DR_MATCH.
@@ -126,7 +130,7 @@ def process_events(events) -> dict[str, np.ndarray]:
             g_phi = gj_phi[gs:ge][None, :]
             dphi  = j_phi - g_phi
             dphi  = np.where(dphi >  np.pi, dphi - 2 * np.pi,
-                    np.where(dphi < -np.pi, dphi + 2 * np.pi, dphi))
+                             np.where(dphi < -np.pi, dphi + 2 * np.pi, dphi))
             dr    = np.sqrt((j_eta - g_eta)**2 + dphi**2)  # (nj, ng)
             best  = np.argmin(dr, axis=1)                  # (nj,)
             matched = dr[np.arange(len(best)), best] < DR_MATCH
@@ -198,27 +202,32 @@ def process_events(events) -> dict[str, np.ndarray]:
     pfc_f = global_pfc_s[mask]
 
     # ── 4. Assemble output arrays ─────────────────────────────────────────────
-    jets_arr                  = np.zeros(n_sel_total, dtype=JET_DTYPE)
-    jets_arr["pt"]            = _flat(jets_sel.pt)
-    jets_arr["eta"]           = flat_jet_eta
-    jets_arr["phi"]           = flat_jet_phi
-    jets_arr["mass"]          = _flat(jets_sel.mass)
-    jets_arr["a_jet"]         = labels_sel
-    jets_arr["truth_pt"]      = truth_pt_sel
-    jets_arr["truth_mass"]    = truth_mass_sel
-    jets_arr["truth_a_mass"]  = truth_amass_sel
+    jets_arr                        = np.zeros(n_sel_total, dtype=JET_DTYPE)
+    jets_arr["pt"]                  = _flat(jets_sel.pt)
+    jets_arr["eta"]                 = flat_jet_eta
+    jets_arr["phi"]                 = flat_jet_phi
+    jets_arr["mass"]                = _flat(jets_sel.mass)
+    jets_arr["a_jet"]               = labels_sel
+    jets_arr["truth_pt"]            = truth_pt_sel
+    jets_arr["truth_mass"]          = truth_mass_sel
+    jets_arr["truth_a_mass"]        = truth_amass_sel
+    jets_arr["failed_dau_dr"]       = failed_dau_dr_sel # track info about the daughter particles, to test matching criteria
+    jets_arr["n_dau_failed"]        = n_dau_failed_sel
+    jets_arr["n_dau"]               = n_dau_sel
 
     labels_arr          = np.zeros(n_sel_total, dtype=LABEL_DTYPE)
     labels_arr["a_jet"] = labels_sel
 
-    # Vectorised scatter into (n_jets, N_TRACKS) track array
+    # Vectorized scatter into (n_jets, N_TRACKS) track array
     tracks_arr = np.zeros((n_sel_total, N_TRACKS), dtype=TRACK_DTYPE)
 
     dphi = fp_phi[pfc_f] - flat_jet_phi[jet_f]
     dphi = np.where(dphi >  np.pi, dphi - 2 * np.pi,
-           np.where(dphi < -np.pi, dphi + 2 * np.pi, dphi))
+                    np.where(dphi < -np.pi, dphi + 2 * np.pi, dphi))
 
     tracks_arr["pt"]         [jet_f, pos_f] = fp_pt[pfc_f]
+    tracks_arr["eta"]        [jet_f, pos_f] = fp_eta[pfc_f]
+    tracks_arr["phi"]        [jet_f, pos_f] = fp_phi[pfc_f]
     tracks_arr["eta_rel"]    [jet_f, pos_f] = fp_eta[pfc_f] - flat_jet_eta[jet_f]
     tracks_arr["phi_rel"]    [jet_f, pos_f] = dphi
     tracks_arr["mass"]       [jet_f, pos_f] = fp_mass[pfc_f]
@@ -231,6 +240,27 @@ def process_events(events) -> dict[str, np.ndarray]:
     tracks_arr["trkQuality"] [jet_f, pos_f] = fp_trkQ[pfc_f].astype(np.int8)
     tracks_arr["puppiWeight"][jet_f, pos_f] = fp_puppi[pfc_f]
     tracks_arr["valid"]      [jet_f, pos_f] = True
+    # trk to trk dR
+    #tracks_arr["trk_trk_dR"]                =
+    # trk to jet dR
+    #tracks_arr["trk_jet_dR"]                = np.sqrt(tracks_arr["eta_rel"] ** 2 + tracks_arr["phi_rel"] ** 2)
+
+
+    # rel, lead, sub, sum pts
+    #jets_arr["sum_trk_pt"]                 = np.sum(tracks_arr["pt"], axis=1)
+    #jets_arr["lead_trk_pt"]                = np.max(tracks_arr["pt"], axis=1)
+    #jets_arr["sublead_trk_pt"]             = np.partition(tracks_arr["pt"], -2, axis=1)[:, -2]
+    #jets_arr["lead_trk_rel_jet_pt"]        = jets_arr["lead_trk_pt"] / jets_arr["pt"]
+    #jets_arr["sublead_trk_rel_jet_pt"]     = jets_arr["sublead_trk_pt"] / jets_arr["pt"]
+    #jets_arr["lead_trk_rel_system_pt"]     = jets_arr["lead_trk_pt"] / jets_arr["sum_trk_pt"]
+    #jets_arr["sublead_trk_rel_system_pt"]  = jets_arr["sublead_trk_pt"] / jets_arr["sum_trk_pt"]
+    # trk multi and trk to jet dR
+    n_valid_trks = np.sum(tracks_arr["valid"], axis=1)
+    jets_arr["trk_multi"] = n_valid_trks
+    #jets_arr["mean_trk_jet_dR"]  = np.sum(tracks_arr["trk_jet_dR"], axis=1) / np.maximum(n_valid_trks, 1)
+    #jets_arr["max_trk_jet_dR"]   = np.max(tracks_arr["trk_jet_dR"], axis=1)
+    #lead_trk_pt_idx = np.argmax(tracks_arr["pt"], axis=1)
+    #jets_arr["lead_trk_dR"]  = tracks_arr["trk_jet_dR"][lead_trk_pt_idx]
 
     # ── 5. PFCand → GenCands truth labels (absent in data → silently skipped) ──
     try:
@@ -264,3 +294,4 @@ def _empty_arrays():
         "tracks": np.zeros((0, N_TRACKS), dtype=TRACK_DTYPE),
         "labels": np.zeros(0, dtype=LABEL_DTYPE),
     }
+

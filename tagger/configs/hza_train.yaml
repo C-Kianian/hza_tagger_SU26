@@ -74,7 +74,7 @@ data:
 
   # Labels to read from each input dataset
   # a_jet is stored as a field inside the jets H5 dataset
-  labels:
+ labels:
     jets:
       - a_jet
 
@@ -84,6 +84,7 @@ data:
       - eta
       - phi
       - mass
+      #- trk_multi
     tracks:
       - pt
       - eta_rel
@@ -97,6 +98,15 @@ data:
       - dzSig
       - trkQuality
       - puppiWeight
+  edge_constructors:
+    - input_name: tracks
+      edge_features:
+        - dR
+        - z
+        - kt
+ #       - subjetIndex
+        - isSelfLoop
+ #       - mass
 
   batch_size:  1024
   num_workers: 0

@@ -26,7 +26,6 @@ from common.variables import A_PDG_ID, DR_MATCH
 _LEPTON_IDS = frozenset({11, 12, 13, 14, 15, 16})
 
 
-
 def find_a_bosons(gen_pdgid, gen_status_flags):
     """Boolean mask of GenParts that are the a (PDG 36) and last copy.
 
@@ -38,15 +37,15 @@ def find_a_bosons(gen_pdgid, gen_status_flags):
 
 
 def label_jets(
-    jet_eta,
-    jet_phi,
-    gen_eta,
-    gen_phi,
-    gen_pdgid,
-    gen_mother_idx,
-    gen_status_flags,
-    gen_mass=None,
-    dr_match: float = DR_MATCH,
+        jet_eta,
+        jet_phi,
+        gen_eta,
+        gen_phi,
+        gen_pdgid,
+        gen_mother_idx,
+        gen_status_flags,
+        gen_mass=None,
+        dr_match: float = DR_MATCH,
 ) -> dict:
     """Assign binary a-jet labels and truth a-boson pole mass to AK4 PUPPI jets.
 
@@ -66,15 +65,25 @@ def label_jets(
     """
     labels_out      = []
     truth_amass_out = []
+    n_dau_out        = []
+    n_dau_failed_out = []
+    failed_dau_max_dr_out = []
 
     for ievt in range(len(jet_eta)):
         n_jets     = len(jet_eta[ievt])
         jet_labels = np.zeros(n_jets, dtype=np.int32)
         tamass     = np.zeros(n_jets, dtype=np.float32)
 
+        evt_n_dau_final             = np.zeros(n_jets, dtype=np.int32)
+        evt_n_dau_failed_final      = np.zeros(n_jets, dtype=np.int32)
+        evt_failed_dau_max_dr_final = np.zeros(n_jets, dtype=np.int32)
+
         if n_jets == 0:
             labels_out.append(jet_labels)
             truth_amass_out.append(tamass)
+            n_dau_out.append(evt_n_dau_final)
+            n_dau_failed_out.append(evt_n_dau_failed_final)
+            failed_dau_max_dr_out.append(evt_failed_dau_max_dr_final)
             continue
 
         pdg     = np.asarray(gen_pdgid[ievt])
@@ -91,6 +100,9 @@ def label_jets(
         if len(a_indices) == 0:
             labels_out.append(jet_labels)
             truth_amass_out.append(tamass)
+            n_dau_out.append(evt_n_dau_final)
+            n_dau_failed_out.append(evt_n_dau_failed_final)
+            failed_dau_max_dr_out.append(evt_failed_dau_max_dr_final)
             continue
 
         j_etas = np.asarray(jet_eta[ievt])
@@ -101,7 +113,7 @@ def label_jets(
             deta = j_etas[:, None] - eta_a[None, :]
             dphi = j_phis[:, None] - phi_a[None, :]
             dphi = np.where(dphi >  np.pi, dphi - 2 * np.pi,
-                   np.where(dphi < -np.pi, dphi + 2 * np.pi, dphi))
+                            np.where(dphi < -np.pi, dphi + 2 * np.pi, dphi))
             return np.sqrt(deta ** 2 + dphi ** 2)
 
         dr_to_a = _dr_matrix(g_eta[a_mask], g_phi[a_mask])  # (n_jets, n_a)
@@ -109,6 +121,11 @@ def label_jets(
         # Per-boson matching: both conditions must hold for the SAME boson.
         matched_by        = []  # one (n_jets,) bool array per boson
         has_had_daughters = []
+
+        # daughter info
+        evt_n_dau    = []
+        evt_n_failed = []
+        evt_max_dr   = []
 
         for i_a, a_idx in enumerate(a_indices):
             is_child    = mothers == a_idx
@@ -118,9 +135,15 @@ def label_jets(
             dau_etas_i = g_eta[dau_mask_i]
             dau_phis_i = g_phi[dau_mask_i]
 
-            if len(dau_etas_i) == 0:
+            n_dau_i = len(dau_etas_i)
+
+            if n_dau_i == 0:
                 has_had_daughters.append(False)
                 matched_by.append(np.zeros(len(j_etas), dtype=bool))
+
+                evt_n_dau.append(0)
+                evt_n_failed.append(np.zeros(n_jets, dtype=np.float32))
+                evt_max_dr.append(np.zeros(n_jets, dtype=np.float32))
                 continue
 
             has_had_daughters.append(True)
@@ -129,9 +152,17 @@ def label_jets(
             all_dau_in_i = np.all(dr_dau_i < dr_match, axis=1)  # (n_jets,)
             matched_by.append(close_this_a & all_dau_in_i)
 
+            # daughter info
+            evt_n_dau.append(len(dau_etas_i))
+            evt_n_failed.append(np.sum(dr_dau_i >= dr_match, axis=1))
+            evt_max_dr.append(np.max(dr_dau_i, axis=1))
+
         if not any(has_had_daughters):
             labels_out.append(jet_labels)
             truth_amass_out.append(tamass)
+            n_dau_out.append(evt_n_dau_final)
+            n_dau_failed_out.append(evt_n_dau_failed_final)
+            failed_dau_max_dr_out.append(evt_failed_dau_max_dr_final)
             continue
 
         matched_matrix = np.column_stack(matched_by)             # (n_jets, n_a)
@@ -151,7 +182,35 @@ def label_jets(
         labels_out.append(jet_labels)
         truth_amass_out.append(tamass)
 
+        # ─── Vectorized Filtering ────────────────────────────────────────────
+        evt_n_dau    = np.array(evt_n_dau)
+        evt_n_failed = np.column_stack(evt_n_failed)
+        evt_max_dr   = np.column_stack(evt_max_dr)
+
+        closest_a = np.argmin(dr_to_a, axis=1)
+        jet_idx   = np.arange(n_jets)
+
+        closest_dr       = dr_to_a[jet_idx, closest_a]
+        closest_n_dau    = evt_n_dau[closest_a]
+        closest_n_failed = evt_n_failed[jet_idx, closest_a]
+        closest_max_dr   = evt_max_dr[jet_idx, closest_a]
+
+        fail_mask = (closest_dr < dr_match) & (closest_n_failed > 0)
+
+        # Place values only on your non-colliding output target arrays
+        evt_n_dau_final[fail_mask]              = closest_n_dau[fail_mask]
+        evt_n_dau_failed_final[fail_mask]       = closest_n_failed[fail_mask]
+        evt_failed_dau_max_dr_final[fail_mask]  = closest_max_dr[fail_mask]
+
+        n_dau_out.append(evt_n_dau_final)
+        n_dau_failed_out.append(evt_n_dau_failed_final)
+        failed_dau_max_dr_out.append(evt_failed_dau_max_dr_final)
+
     return {
         "labels":       ak.Array(labels_out),
         "truth_a_mass": ak.Array(truth_amass_out),
+        "failed_dau_dr": ak.Array(failed_dau_max_dr_out),
+        "n_dau_failed": ak.Array(n_dau_failed_out),
+        "n_dau":        ak.Array(n_dau_out),
     }
+

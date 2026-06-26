@@ -12,7 +12,7 @@ JET_BRANCHES = [
     "Jet_eta",
     "Jet_phi",
     "Jet_mass",
-#    "Jet_jetId",
+    #    "Jet_jetId",
     "Jet_puIdDisc",
     "Jet_nConstituents",
 ]
@@ -97,6 +97,8 @@ JET_FEATURES = ["pt", "eta", "phi", "mass"]
 
 TRACK_FEATURES = [
     "pt",
+    "eta",
+    "phi",
     "eta_rel",
     "phi_rel",
     "mass",
@@ -134,14 +136,15 @@ DR_MATCH = 0.4
 # The n* counter branches are required by NanoAODSchema to build jagged arrays.
 REQUIRED_BRANCHES = (
     # event ID scalars (required by NanoAODSchema — cannot be dropped)
-    ["run", "luminosityBlock", "event"]
-    # counters (required by NanoAODSchema jagged builder)
-    + ["nJet", "nJetPFCands", "nPFCands", "nGenPart", "nGenCands", "nGenJet"]
-    + JET_BRANCHES
-    + JET_PFCAND_IDX_BRANCHES
-    + PFCAND_KIN_BRANCHES
-    + PFCAND_TRACK_BRANCHES
-    + GENPART_BRANCHES
-    + GENCANDS_BRANCHES
-    + GENJET_BRANCHES
+        ["run", "luminosityBlock", "event"]
+        # counters (required by NanoAODSchema jagged builder)
+        + ["nJet", "nJetPFCands", "nPFCands", "nGenPart", "nGenCands", "nGenJet"]
+        + JET_BRANCHES
+        + JET_PFCAND_IDX_BRANCHES
+        + PFCAND_KIN_BRANCHES
+        + PFCAND_TRACK_BRANCHES
+        + GENPART_BRANCHES
+        + GENCANDS_BRANCHES
+        + GENJET_BRANCHES
 )
+

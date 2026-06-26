@@ -65,9 +65,6 @@ def main():
 
     rng = np.random.default_rng(args.seed)
 
-    n = args.name
-    if n != '': n = '_' + n
-
     split_names = [f"train", f"val", f"test"]
     split_probs = np.array([args.train, args.val, args.test], dtype=float)
     
@@ -152,7 +149,7 @@ def main():
     print("="*40)
     print(f"Total jets processed: {total_jets}")
     for name in split_names:
-        print(f"  {name:5s}: {split_counts[name]:8d} jets -> {outdir / f'{name}.h5'}")
+        print(f"  {name:5s}: {split_counts[name]:8d} jets -> {outdir / f'{name}{n}.h5'}")
 
 
 if __name__ == "__main__":
