@@ -67,14 +67,15 @@ data:
   test_file:  path/to/test/file
 
   norm_dict:  tagger/configs/norm_dict.yaml
-  class_dict: null  # disable — inherited EOS path from salt/configs/base.yaml is not accessible
+  class_dict: null # disable — inherited EOS path from salt/configs/base.yaml is not accessible
 
-  # No class_dict needed for simple binary classification
-  # (use_class_dict: false in the task above)
+ 
+# No class_dict needed for simple binary classification
+# (use_class_dict: false in the task above)
+# Labels to read from each input dataset
+# a_jet is stored as a field inside the jets H5 dataset
 
-  # Labels to read from each input dataset
-  # a_jet is stored as a field inside the jets H5 dataset
- labels:
+  labels:
     jets:
       - a_jet
 
@@ -84,7 +85,6 @@ data:
       - eta
       - phi
       - mass
-      #- trk_multi
     tracks:
       - pt
       - eta_rel
@@ -98,15 +98,6 @@ data:
       - dzSig
       - trkQuality
       - puppiWeight
-  edge_constructors:
-    - input_name: tracks
-      edge_features:
-        - dR
-        - z
-        - kt
- #       - subjetIndex
-        - isSelfLoop
- #       - mass
 
   batch_size:  1024
   num_workers: 0

@@ -1,41 +1,47 @@
 jets:
   pt:
-    mean: 47.091362
-    std: 25.189819
+    mean: 48.982922
+    std: 31.285416
   eta:
-    mean: 0.004191
-    std: 1.353515
+    mean: 0.003962
+    std: 1.295709
   phi:
-    mean: -0.001716
-    std: 1.814482
+    mean: -0.005693
+    std: 1.814796
   mass:
-    mean: 4.959864
-    std: 3.133079
+    mean: 5.47477
+    std: 3.867927
 tracks:
   pt:
-    mean: 6.358724
-    std: 13.039509
+    mean: 5.813047
+    std: 12.262042
+  eta:
+    mean: 0.006719
+    std: 1.297475
+  phi:
+    mean: -0.006357
+    std: 1.815716
   eta_rel:
-    mean: -4.0e-05
-    std: 0.159318
+    mean: 0.000159
+    std: 0.154152
   phi_rel:
-    mean: 6.0e-05
-    std: 0.159273
+    mean: 0.000132
+    std: 0.1553
   mass:
-    mean: 0.092425
-    std: 0.063467
+    mean: 0.088142
+    std: 0.06633
   charge:
-    mean: 0.012035
-    std: 0.835626
+    mean: 0.00984
+    std: 0.819963
   pdgId:
-    mean: 19.790365
-    std: 166.844971
+    mean: 20.424372
+    std: 168.3526
   dxy:
     mean: 0.0
     std: 1.0
   dz:
-    mean: -0.319811
-    std: 5.254901
+    mean: -0.346148
+    std: 4.872296
   dxySig:
     mean: 0.0
     std: 1.0
@@ -43,8 +49,8 @@ tracks:
     mean: 0.0
     std: 1.0
   trkQuality:
-    mean: 3.485379
-    std: 2.2955
+    mean: 3.353004
+    std: 2.34675
   puppiWeight:
-    mean: 0.989637
-    std: 0.042485
+    mean: 0.988588
+    std: 0.045272
