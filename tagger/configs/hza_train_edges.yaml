@@ -6,6 +6,7 @@
 
 name: hza_tagger
 
+
 model:
   lrs_config:
     initial: 1e-7
@@ -23,12 +24,20 @@ model:
             output_size: &embed_dim 128
             hidden_layers: [128]
             activation: &activation ReLU
+              
+        - input_name: EDGE
+          dense_config:
+            input_size: 8
+            output_size: &edge_embed_dim 32
+            hidden_layers: [32]
+            activation: *activation
 
       encoder:
         class_path: salt.models.TransformerEncoder
         init_args:
           embed_dim: *embed_dim
           num_layers: 3
+          edge_embed_dim: 32
           out_dim: &out_dim 64
           mha_config:
             num_heads: 4
@@ -61,6 +70,7 @@ model:
                   hidden_layers: [64, 32]
                   activation: *activation
 
+
 data:
   train_file: path/to/train/file
   val_file:   path/to/val/file
@@ -77,6 +87,11 @@ data:
   labels:
     jets:
       - a_jet
+
+  input_map:
+    jets: jets
+    tracks: tracks
+    EDGE: tracks
 
   variables:
     jets:
@@ -98,6 +113,13 @@ data:
       - dzSig
       - trkQuality
       - puppiWeight
+    EDGE:
+      - dR
+      - z
+      - kt
+      #- subjetIndex
+      - isSelfLoop
+      #- mass
 
   batch_size:  1024
   num_workers: 0
