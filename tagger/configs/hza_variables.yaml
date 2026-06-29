@@ -14,8 +14,6 @@ tracks:
   # Kinematic
   - name: pt
     scale: log
-  - name: eta
-  - name: phi
   - name: eta_rel
   - name: phi_rel
   - name: mass
@@ -34,4 +32,3 @@ tracks:
     scale: tanh
   - name: trkQuality
   - name: puppiWeight
-
