@@ -16,6 +16,7 @@
 #   bash tagger/scripts/train.sh --rw 			 # auto reweight a classification task
 #   bash tagger/scripts/train.sh --mass=4_0 	 	 # for a specific mass norm dict, default is 2_0
 #   bash tagger/scripts/train.sh --rename=some_name_here # the name to rename the standard hza_tagger_YMD_HMS out directory
+#   bash tagger/scripts/train.sh --edg 			 # include to calculate edge features
 #
 # Environment overrides:
 #   TRAIN_FILE, VAL_FILE, TEST_FILE   explicit H5 paths
@@ -40,9 +41,10 @@ POSITIONAL=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --mass=*)     MASS="${1#*=}" ;;
-        --rename=*)  RENAME="${1#*=}" ;;
+        --rename=*)   RENAME="${1#*=}" ;;
         --rw)         RW=true ;;
-        *)
+	--edg)        EF=true ;;
+	*)
             POSITIONAL+=("$1")
             ;;
     esac
@@ -72,7 +74,13 @@ fi
 
 # ── Resolve CONFIG ────────────────────────────────────────────────────────────
 CONFIG="${CONFIG:-tagger/configs/hza_train.yaml}"
+if [[ "$EF" == true ]]; then
+    echo "==> Using train yaml with edge feature calculation …"
+    CONFIG="tagger/configs/hza_train_edge_features.yaml"
+fi
 [[ -f "${CONFIG}" ]] || die "Config not found: ${CONFIG}"
+
+export CONFIG="${CONFIG}" #export env variable
 
 # ── Auto-discover H5 files ────────────────────────────────────────────────────
 _pick_h5() {
@@ -96,6 +104,11 @@ else
     VAL_FILE="$(_pick_h5   "${VAL_FILE:-}"   data/val.h5   data/test_out.h5)"
     TEST_FILE="$(_pick_h5  "${TEST_FILE:-}"  data/test.h5  data/test_out.h5)"
 fi
+
+#export env variable
+export TRAIN_FILE="${TRAIN_FILE}"
+export VAL_FILE="${VAL_FILE}"
+export TEST_FILE="${TEST_FILE}"
 
 # ── Clean file args before passing to salt ────────────────────────────────────
 if [[ -n "${1:-}" && "${1}" != --* ]]; then
@@ -123,16 +136,22 @@ fi
 echo "Background rw: ${W_BKG}, signal rw: ${W_SIG}"
 EXTRA_LOSS_ARGS="--model.model.init_args.tasks.init_args.modules.init_args.loss.init_args.weight=[${W_BKG},${W_SIG}]"
 
+#export env variable
+export W_BKG=${W_BKG}
+export W_SIG=${W_SIG}
 
 # == norm dict =================================================================
 MASS="${MASS:-}"
 if [[ -n "$MASS" ]]; then
-    NORM_DICT="tagger/configs/norm_dict_mA${MASS}.yaml"
+    NORM_DICT="tagger/configs/mass_specific_norm_dicts/norm_dict_mA${MASS}.yaml"
 else
     NORM_DICT="tagger/configs/norm_dict.yaml"
 fi
 NAME=hza_tagger_$(date +%Y%m%d_%H%M%S)
 EXTRA_DATA_ARGS="--data.norm_dict ${NORM_DICT}"
+
+#export env variable
+export MASS=${MASS}
 
 info "Config:     ${CONFIG}"
 info "Train file: ${TRAIN_FILE}"
@@ -156,7 +175,7 @@ salt fit \
     --force \
     "$@"
 
-
+# == Option to rename the output dir ===========================================
 # 1. Capture the exit code of the training process
 TRAIN_STATUS=$?
 

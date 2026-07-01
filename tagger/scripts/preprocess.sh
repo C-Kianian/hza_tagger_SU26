@@ -40,10 +40,12 @@ TRAIN_FILE=${1:-data/train.h5}
 VARIABLES=tagger/configs/hza_variables.yaml
 
 # mass specific norm dict, avoids recalculating
-if [[ -n "${MASS:-}" ]]; then    
+if [[ -n "${MASS:-}" ]]; then
     NORM_DICT="tagger/configs/norm_dict_mA${MASS}.yaml"
+    echo "Mass specified, creating mass specific dict: ${NORM_DICT}"
 else
-    NORM_DICT=tagger/configs/norm_dict_mA2_0.yaml
+    echo "No mass specified, defaulting to generic name: tagger/configs/norm_dict.yaml"
+    NORM_DICT=tagger/configs/norm_dict.yaml
 fi
 
 
