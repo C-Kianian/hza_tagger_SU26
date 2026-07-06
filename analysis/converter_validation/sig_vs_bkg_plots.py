@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import mplhep as hep
 import gc
+import hist
 from argparse import ArgumentParser
 
 hep.style.use("CMS")
@@ -10,18 +11,20 @@ hep.style.use("CMS")
 parser = ArgumentParser()
 parser.add_argument('--file', type=str, required=True, help='path to the file for analysis')
 parser.add_argument('--maxEvents', type=int, default=None, help='max amount of events to analyze')
-parser.add_argument('--plot', type=bool, default=False, help='set true for all the plots to be made')
+parser.add_argument('--plot', action='store_true', help='set true for all the plots to be made')
+parser.add_argument('--atlas', action='store_true', help='set true for plots with ATLAS variables')
 args = parser.parse_args()
 
 # get file path and set up histogram tracker
 FILE = args.file
 MAX_EVENTS = args.maxEvents
 PLOT = args.plot
+ATLAS = args.atlas
 hists = []
 
 def print_val(file):
     # display the content of the file
-    def print_keys(name):
+    def print_keys(name, _):
         print(name)
     file.visititems(print_keys) # https://docs.h5py.org/en/stable/high/group.html#h5py.Group.visititems
 
@@ -37,13 +40,13 @@ def print_val(file):
     print("Tracks dtype:", tracks.dtype)
     gc.collect()
 
-def calculate_bin_edges(sig, bkg, n_bins_float=50):
+def calculate_bin_edges(plots, n_bins_float=50):
     """
     Vibecoded:
     Generates robust bin edges for both discrete and continuous HEP variables.
     """
     # Combine to find the shared data envelope
-    comb = np.concatenate([sig, bkg])
+    comb = np.concatenate(plots)
 
     # 1. Safely check if the array contains integers (handles np.int32, np.int64)
     is_discrete = np.issubdtype(comb.dtype, np.integer)
@@ -55,8 +58,7 @@ def calculate_bin_edges(sig, bkg, n_bins_float=50):
         ul = np.max(comb)
         bins = int(ul - ll + 1)
         # Shift edges by 0.5 so integer values fall in the center of the bin
-        bin_edges = np.linspace(ll - 0.5, ul + 0.5, bins + 1)
-        return bin_edges
+        return ll - 0.5, ul + 0.5, bins + 1
 
     # 2. For continuous variables (pt, eta, phi, mass, etc.)
     # Use percentiles to ignore massive outliers that squash the histogram
@@ -79,45 +81,42 @@ def calculate_bin_edges(sig, bkg, n_bins_float=50):
     if np.min(comb) >= 0 and ll < 0:
         ll = 0.0
 
-    # Generate the final edges
-    bin_edges = np.linspace(ll, ul, n_bins_float + 1)
+    return ll, ul, n_bins_float + 1
 
-    return bin_edges
+def plot_hist(to_plot, labels, x, name, y="Entries", norm=False, logy=False, logx=False):
+    # quick checks, ensure same lengths, less than color length, and non empty
+    if len(to_plot) != len(labels): raise ValueError("to_plot and labels must have the same length")
+    if len(to_plot) > 10: raise ValueError("Not enough colors for this many plots.")
+    for plot, label in zip(to_plot, labels, strict=True):
+        if len(plot) == 0: raise ValueError(f"Empty for {label}")
 
-def plot_hist(sig, bkg, x, name, truth=None, y="Entries", norm=False, logy=False, logx=False):
-    # quick check
-    if len(sig) == 0 or len(bkg) == 0:
-        raise ValueError(f"Sig or bkg is empty for {name}")
+    ll, ul, n_bins = calculate_bin_edges(to_plot, n_bins_float=50) # calc bin edges
 
-    length_truth = len(truth) if truth is not None else 0
-
-    bin_edges = calculate_bin_edges(sig, bkg, n_bins_float=50)
-
-    # hists for sig and bkg
-    h_sig, _ = np.histogram(sig, bins=bin_edges)
-    h_bkg, _ = np.histogram(bkg, bins=bin_edges)
-    # hists for truth
-    truth_hists = []
-    for i in range(length_truth):
-        h, _ = np.histogram(truth[i], bins=bin_edges)
-        truth_hists.append(h)
-
+    # hists
+    hists = []
+    for plot in to_plot:
+        h = hist.Hist(hist.axis.Regular(n_bins, ll, ul, label=""))
+        h.fill(plot)
+        hists.append(h)
+        del h
 
     # norm if specified
     if norm:
+        norm_hists = []
+        for h in hists:
+            if h.sum() == 0: norm_hists.append(h) # add even if empty
+            else: norm_hists.append(h / h.sum())
+            del h
+        hists = norm_hists
         y = "Normalised entries"
-        h_sig = h_sig / h_sig.sum()
-        h_bkg = h_bkg / h_bkg.sum()
-        # norm truth
-        for i in range(length_truth):
-            truth_hists[i] = truth_hists[i] / truth_hists[i].sum()
 
     # plot the overlaid hist
     fig, ax = plt.subplots()
     if logy: ax.set_yscale("log") # log if specified
     if logx: ax.set_xscale("log")
-    hep.histplot(h_sig, bins=bin_edges, ax=ax, label=f"Signal (a-jet, N={len(sig)})", color="tab:red", flow="show")
-    hep.histplot(h_bkg, bins=bin_edges, ax=ax, label=f"Background (N={len(bkg)})", color="tab:blue", linestyle="--", flow="show")
+    colors = list(plt.cm.tab10.colors)
+    for l, h, c, plot in zip(labels, hists, colors, to_plot):
+        hep.histplot(h, ax=ax, label=f"{l} (N = {len(plot)})", color=c, flow="show")
     ax.set_xlabel(x)
     ax.set_ylabel(y)
     ax.legend()
@@ -155,6 +154,17 @@ def main():
                 "phi":  r"$\phi^{jet}$",
                 "mass": "$m^{jet} [GeV/c^{2}]$",
             }
+            if ATLAS:
+                atlas_labels = {
+                    "atlas_valid": "ATLAS valid",
+                    "trk_multi": "Track multiplicity",
+                    "lead_trk_rel_system_pt": r"$\frac{p_T^{\mathrm{leading\ track}}}{\sum_{\text{tracks}} p_T}$",
+                    "lead_trk_dr": r"$\Delta R^{\mathrm{leading\ track}}$",
+                    "angularity_n2": "Angularity (n2)",
+                    "U1_0p7": r"$U_1^{0.7}$",
+                    "M2_0p3": r"$M_2^{0.3}$",
+                    "tau2": r"$\tau_2$ (N-Subjettiness)",
+                }
 
             trk_labels = {
                 "pt": r"$p_T^{\mathrm{track}} [GeV/c]$",
@@ -182,7 +192,35 @@ def main():
                 # plot
                 sig_jet_var = jets[jet_var][labels == 1]
                 bkg_jet_var = jets[jet_var][labels == 0]
-                plot_hist(sig_jet_var, bkg_jet_var, x=jet_xtitle, name=f"jet_{jet_var}", norm=True)
+                plot_hist(to_plot=[sig_jet_var, bkg_jet_var], labels=["Signal", "Background"], x=jet_xtitle, name=f"jet_{jet_var}", norm=True)
+
+            ####### ATLAS JET INFO ############
+            if ATLAS:
+                atlas_mask = jets["atlas_valid"].ravel()
+                atlas_sig_mask = atlas_mask & (labels == 1)
+                atlas_bkg_mask = atlas_mask & (labels == 0)
+
+                for atlas_var, atlas_xtitle in atlas_labels.items():
+                    if atlas_var not in true_jet_names:
+                        print(f"Missing atlas variable: {atlas_var}")
+                        continue
+
+                    sig_vals = jets[atlas_var][labels == 1]
+                    bkg_vals = jets[atlas_var][labels == 0]
+                    atlas_sig_vals = jets[atlas_var][atlas_sig_mask]
+                    atlas_bkg_vals = jets[atlas_var][atlas_bkg_mask]
+                    plots = [sig_vals, bkg_vals, atlas_sig_vals, atlas_bkg_vals]
+                    lbls = ["Signal", "Background", "ATLAS Sig", "ATLAS Bkg"]
+
+                    if atlas_sig_vals.dtype == bool: # just to see the events which are atlas valid
+                        plots = [jets[atlas_var][labels == 1].astype(int), jets[atlas_var][labels == 0].astype(int)]
+                        lbls = ["Signal", "Background"]
+
+                    if atlas_var == "angularity_n2": # remove high values of angularity
+                        plots = [sig_vals[sig_vals < 1000], bkg_vals[bkg_vals < 1000],
+                                 atlas_sig_vals[atlas_sig_vals < 1000], atlas_bkg_vals[atlas_bkg_vals < 1000]]
+
+                    plot_hist(to_plot=plots, labels=lbls, x=atlas_xtitle, name=f"atlas_{atlas_var}", norm=True)
 
             ############# TRACK INFO ############
             # masks
@@ -204,7 +242,7 @@ def main():
                 trk_vals = tracks[trk_var].ravel().astype(float)
                 sig_trk_vals = trk_vals[sig_mask]
                 bkg_trk_vals = trk_vals[bkg_mask]
-                plot_hist(sig_trk_vals, bkg_trk_vals, x=trk_xtitle, name=f"trk_{trk_var}", norm=True)
+                plot_hist(to_plot=[sig_trk_vals, bkg_trk_vals], labels=["Signal", "Background"], x=trk_xtitle, name=f"trk_{trk_var}", norm=True)
 
             ############ MULTIPLICITY INFO ###########
 
@@ -215,7 +253,7 @@ def main():
             sig_trk_multi = multi[labels == 1]
             bkg_trk_multi = multi[labels == 0]
 
-            plot_hist(sig_trk_multi, bkg_trk_multi, x="Track multiplicity", name="trk_multi", norm=True)
+            plot_hist(to_plot=[sig_trk_multi, bkg_trk_multi], labels=["Signal", "Background"], x="Track multiplicity", name="trk_multi", norm=True)
 
             ############ (RELATIVE) SUB AND LEADING INFO ###########
             # get valid track pt values
@@ -232,9 +270,9 @@ def main():
             is_sig = labels == 1 # signal mask
 
             # plot lead, sub, and sum pts
-            plot_hist(lead_pt[is_sig], lead_pt[~is_sig], x=r"$p_T^{\mathrm{leading\ track}}$", name="trk_lead_pt", norm=True)
-            plot_hist(sublead_pt[is_sig], sublead_pt[~is_sig], x=r"$p_T^{\mathrm{sub-leading\ track}}$", name="trk_sub_lead_pt", norm=True)
-            plot_hist(sum_pt[is_sig], sum_pt[~is_sig], x=r"$\sum p_T^{\mathrm{track}}$", name="trk_sum_pt", norm=True)
+            plot_hist(to_plot=[lead_pt[is_sig], lead_pt[~is_sig]], labels=["Signal", "Background"], x=r"$p_T^{\mathrm{leading\ track}}$", name="trk_lead_pt", norm=True)
+            plot_hist(to_plot=[sublead_pt[is_sig], sublead_pt[~is_sig]], labels=["Signal", "Background"], x=r"$p_T^{\mathrm{sub-leading\ track}}$", name="trk_sub_lead_pt", norm=True)
+            plot_hist(to_plot=[sum_pt[is_sig], sum_pt[~is_sig]], labels=["Signal", "Background"], x=r"$\sum p_T^{\mathrm{track}}$", name="trk_sum_pt", norm=True)
 
             jet_pt = jets["pt"]
 
@@ -243,15 +281,12 @@ def main():
             rel_sum_pt = sum_pt / jet_pt
 
             # plots lead and sub lead wrt jet pt
-            plot_hist(rel_lead_pt[is_sig], rel_lead_pt[~is_sig], x=r"$p_T^{\mathrm{leading\ track}} / p_T^{\mathrm{jet}}$", name="trk_rel_lead_pt", norm=True)
-            plot_hist(rel_sublead_pt[is_sig], rel_sublead_pt[~is_sig], x=r"$p_T^{\mathrm{sub-leading\ track}} / p_T^{\mathrm{jet}}$", name="trk_rel_sub_lead_pt", norm=True)
-            plot_hist(rel_sum_pt[is_sig], rel_sum_pt[~is_sig], x=r"$\sum p_T^{\mathrm{track}} / p_T^{\mathrm{jet}}$", name="trk_rel_sum_pt", norm=True)
+            plot_hist(to_plot=[rel_lead_pt[is_sig], rel_lead_pt[~is_sig]], labels=["Signal", "Background"], x=r"$p_T^{\mathrm{leading\ track}} / p_T^{\mathrm{jet}}$", name="trk_rel_lead_pt", norm=True)
+            plot_hist(to_plot=[rel_sublead_pt[is_sig], rel_sublead_pt[~is_sig]], labels=["Signal", "Background"], x=r"$p_T^{\mathrm{sub-leading\ track}} / p_T^{\mathrm{jet}}$", name="trk_rel_sub_lead_pt", norm=True)
+            plot_hist(to_plot=[rel_sum_pt[is_sig], rel_sum_pt[~is_sig]], labels=["Signal", "Background"], x=r"$\sum p_T^{\mathrm{track}} / p_T^{\mathrm{jet}}$", name="trk_rel_sum_pt", norm=True)
 
             ############ DELTA R INFO ###########
-            dR = np.sqrt(
-                tracks["eta_rel"]**2 +
-                tracks["phi_rel"]**2
-            )
+            dR = np.sqrt(tracks["eta_rel"]**2 + tracks["phi_rel"]**2)
 
             dR = np.where(trk_valid, dR, np.nan)
 
@@ -264,8 +299,8 @@ def main():
             sig_max_dR = max_dR[labels == 1]
             bkg_max_dR = max_dR[labels == 0]
 
-            plot_hist(sig_mean_dR, bkg_mean_dR, x=r"Mean $\Delta R$", name="trk_dR_mean", norm=True)
-            plot_hist(sig_max_dR, bkg_max_dR, x=r"Max $\Delta R$", name="trk_dR_max", norm=True)
+            plot_hist(to_plot=[sig_mean_dR, bkg_mean_dR], labels=["Signal", "Background"], x=r"Mean $\Delta R$", name="trk_dR_mean", norm=True)
+            plot_hist(to_plot=[sig_max_dR, bkg_max_dR], labels=["Signal", "Background"], x=r"Max $\Delta R$", name="trk_dR_max", norm=True)
 
 
 
