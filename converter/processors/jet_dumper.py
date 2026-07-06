@@ -42,7 +42,6 @@ def _flat_pf_field(pf, field: str, default: float = 0.0) -> np.ndarray:
     except (ValueError, ak.errors.FieldNotFoundError):
         return np.full(int(ak.sum(ak.num(pf.pt))), default, dtype=np.float32)
 
-
 def _sel_remap(flat_sel: np.ndarray) -> np.ndarray:
     """Global selected-jet index for each original jet slot (-1 if not selected).
 
@@ -52,6 +51,168 @@ def _sel_remap(flat_sel: np.ndarray) -> np.ndarray:
     cs = np.cumsum(flat_sel.astype(np.int64))
     return np.where(flat_sel, cs - 1, -1)
 
+def compute_ecfs(tracks_pt, tracks_eta, tracks_phi, jet_pt, beta, calc_e3=False):
+    """
+    Computes 2-point and 3-point energy correlation functions.
+    Inputs are expected to be 2D arrays of shape (N_jets, N_tracks),
+    except jet_pt which is (N_jets,).
+    """
+    # if jet pt < 0 set to 1
+    safe_jet_pt = np.where(jet_pt > 0, jet_pt, 1.0)
+
+    # momentum fractions z_i, (N_jets, N_tracks)
+    z = tracks_pt / safe_jet_pt[:, np.newaxis]
+
+    # dR matrix between track pairs (N_jets, N_tracks, N_tracks)
+    # actual calculation uses R which swaps eta for y
+    deta = tracks_eta[:, :, np.newaxis] - tracks_eta[:, np.newaxis, :]
+    dphi = tracks_phi[:, :, np.newaxis] - tracks_phi[:, np.newaxis, :]
+    dphi = np.where(dphi > np.pi, dphi - 2*np.pi,
+                    np.where(dphi < -np.pi, dphi + 2*np.pi, dphi))
+
+    dr = np.sqrt(deta**2 + dphi**2)
+    dr_beta = dr ** beta
+
+    # calc e_2, 2-point ECF
+    # z_i * z_j * dR_ij^beta
+    e2_matrix = z[:, :, np.newaxis] * z[:, np.newaxis, :] * dr_beta
+    # sum all i, j, divide by 2! to remove double counting
+    e2_beta = np.sum(e2_matrix, axis=(1, 2)) / 2.0
+
+    # for jets that had 0 pt at the start set to 0
+    e2_beta = np.where(jet_pt > 0, e2_beta, 0.0)
+
+    if not calc_e3: return e2_beta, None
+
+    # calc e_3, 3-point ECF
+    # construct z_i * z_j * z_k. (N_jets, N_tracks, N_tracks, N_tracks)
+    z_ijk = z[:, :, np.newaxis, np.newaxis] * z[:, np.newaxis, :, np.newaxis] * z[:, np.newaxis, np.newaxis, :]
+
+    # Broadcast the 2D pairwise angles into the 4D triplet space
+    dr_ij = dr_beta[:, :, :, np.newaxis]  # dR_ij (add k dimension)
+    dr_jk = dr_beta[:, np.newaxis, :, :]  # dR_jk (add i dimension)
+    dr_ik = dr_beta[:, :, np.newaxis, :]  # dR_ki (add j dimension)
+
+    min_angle = np.minimum(np.minimum(dr_ij, dr_ik), dr_jk)
+
+    e3_matrix = z_ijk * min_angle
+
+    # sum all i, j, k, divide by 3! (6) to double counting
+    e3_beta = np.sum(e3_matrix, axis=(1, 2, 3)) / 6.0
+
+    # for jets that had 0 pt at the start set to 0
+    e3_beta = np.where(jet_pt > 0, e3_beta, 0.0)
+
+    return e2_beta, e3_beta
+
+def find_kt_subjets_numpy(eta, phi, pt, n_subjets, subjet_radius):
+    """
+    Find subjet axes using kT-algorithm for ONE jet.
+    Inputs are 1D arrays without padded/invalid tracks.
+    """
+    # clustering impossible with fewer particles than subjets
+    if len(pt) < n_subjets:
+        return None
+
+    # start with individual trks, will shrink as subjets merge
+    curr_eta = eta.copy()
+    curr_phi = phi.copy()
+    curr_pt = pt.copy()
+
+    while len(curr_pt) > n_subjets: # repeat until less trks than num subjets requested, ie. no more merging possible
+        # particle to beam distance, d_iB = pT^2
+        # treats each particle as its own jet beam
+        # later particles can merge into this beam or particles can merge into a combined particle
+        d_iB = curr_pt ** 2
+
+        # trk to trk dr distances
+        deta = curr_eta[:, np.newaxis] - curr_eta[np.newaxis, :]
+        dphi = curr_phi[:, np.newaxis] - curr_phi[np.newaxis, :]
+        dphi = np.where(dphi > np.pi, dphi - 2 * np.pi,
+                        np.where(dphi < -np.pi, dphi + 2 * np.pi, dphi))
+        dr = np.sqrt(deta**2 + dphi**2)
+
+        # get min(pT_i^2, pT_j^2) for each track pair
+        min_pt_sq = np.minimum(curr_pt[:, np.newaxis], curr_pt[np.newaxis, :]) ** 2
+        # calc distances between particle pairs
+        d_ij = min_pt_sq * (dr / subjet_radius) ** 2
+
+        # set the diagonal (i == j) to inf so a particle won't cluster with itself
+        np.fill_diagonal(d_ij, np.inf)
+
+        # find the pair with min distance, these particles will be merged first
+        min_ij_idx = np.argmin(d_ij) # returns inx of min if the array was 1D
+        i, j = np.unravel_index(min_ij_idx, d_ij.shape) # converts 1D idx into coordinate of d_ij matrix
+        min_d_ij = d_ij[i, j] # gets the min
+
+        min_iB_idx = np.argmin(d_iB) # get trk with min beam distance
+        min_d_iB = d_iB[min_iB_idx]
+
+        # merge step
+        if min_d_iB < min_d_ij: # case one: beam is closer to one of the particles than they are to each other
+            # merge with beam, remove the particle close to the beam
+            curr_eta = np.delete(curr_eta, min_iB_idx)
+            curr_phi = np.delete(curr_phi, min_iB_idx)
+            curr_pt = np.delete(curr_pt, min_iB_idx)
+        else: # case 2: particles are closer to each other than the beam
+            # merge particle i and j
+            pt_i, pt_j = curr_pt[i], curr_pt[j]
+            pt_tot = pt_i + pt_j # combined pt
+
+            eta_new = (curr_eta[i] * pt_i + curr_eta[j] * pt_j) / pt_tot # combined eta
+
+            dphi_ij = curr_phi[j] - curr_phi[i]
+            if dphi_ij > np.pi: dphi_ij -= 2 * np.pi
+            elif dphi_ij < -np.pi: dphi_ij += 2 * np.pi
+            phi_new = curr_phi[i] + dphi_ij * pt_j / pt_tot   # combined phi
+            phi_new = (phi_new + np.pi) % (2 * np.pi) - np.pi # ensure within [-pi, pi]
+
+            # delete old particle indices, higher then lower, otherwise higher would shift
+            first, second = sorted([i, j], reverse=True)
+            curr_eta = np.delete(curr_eta, [first, second])
+            curr_phi = np.delete(curr_phi, [first, second])
+            curr_pt = np.delete(curr_pt, [first, second])
+
+            # add the combined pseudo-jet
+            curr_eta = np.append(curr_eta, eta_new)
+            curr_phi = np.append(curr_phi, phi_new)
+            curr_pt = np.append(curr_pt, pt_tot)
+
+    return np.stack([curr_eta, curr_phi], axis=-1) # return subjet info, each row is subjet
+
+def compute_batch_nsubjettiness(trks_arr, subjet_axes_arr, jet_radius):
+    """
+    Computes N-subjettiness vectorized across passing jets.
+
+    Inputs:
+        trks_arr: Structured array of shape (N_jets, N_TRACKS)
+        subjet_axes_arr: Array of shape (N_jets, n_subjets, 2) containing [eta, phi]
+        jet_radius: float (e.g., 0.4)
+    """
+    t_pt = trks_arr["pt"] # (N_jets, N_TRACKS)
+    t_eta = trks_arr["eta"]
+    t_phi = trks_arr["phi"]
+
+    # makes shapes compatible: tracks (N_jets, N_TRACKS, 1)  -  subjet axes (N_jets, 1, n_subjets)
+    # so for every jet we get deta, dphi values between each track subject pair
+    deta = t_eta[:, :, np.newaxis] - subjet_axes_arr[:, np.newaxis, :, 0] # (N_jets, N_TRACKS, n_subjets)
+    dphi = t_phi[:, :, np.newaxis] - subjet_axes_arr[:, np.newaxis, :, 1] # (N_jets, N_TRACKS, n_subjets)
+
+    # boundary wrapping
+    dphi = np.where(dphi > np.pi, dphi - 2*np.pi,
+                    np.where(dphi < -np.pi, dphi + 2*np.pi, dphi))
+
+    dr = np.sqrt(deta**2 + dphi**2) # calc dr for each track, subjet pair (N_jets, N_TRACKS, n_subjets)
+
+    # for each track, find min distance to a subjet axis (axis=2)
+    min_dr = np.min(dr, axis=2) # (N_jets, N_TRACKS)
+
+    # calc subjettiness parts across the tracks (axis=1)
+    numerator = np.sum(t_pt * min_dr, axis=1)
+    denominator = np.sum(t_pt * jet_radius, axis=1)
+
+    # final ratios
+    return np.where(denominator > 0, numerator / denominator, -999999.0)
 
 # ── main processor function ────────────────────────────────────────────────────
 
@@ -241,9 +402,9 @@ def process_events(events) -> dict[str, np.ndarray]:
     tracks_arr["puppiWeight"][jet_f, pos_f] = fp_puppi[pfc_f]
     tracks_arr["valid"]      [jet_f, pos_f] = True
     # trk to trk dR
-    #tracks_arr["trk_trk_dR"]                =
+    #tracks_arr["trk_trk_dr"]                =
     # trk to jet dR
-    #tracks_arr["trk_jet_dR"]                = np.sqrt(tracks_arr["eta_rel"] ** 2 + tracks_arr["phi_rel"] ** 2)
+    tracks_arr["jet_trk_dr"]                = np.sqrt(tracks_arr["eta_rel"] ** 2 + tracks_arr["phi_rel"] ** 2)
 
 
     # rel, lead, sub, sum pts
@@ -251,16 +412,143 @@ def process_events(events) -> dict[str, np.ndarray]:
     #jets_arr["lead_trk_pt"]                = np.max(tracks_arr["pt"], axis=1)
     #jets_arr["sublead_trk_pt"]             = np.partition(tracks_arr["pt"], -2, axis=1)[:, -2]
     #jets_arr["lead_trk_rel_jet_pt"]        = jets_arr["lead_trk_pt"] / jets_arr["pt"]
-    #jets_arr["sublead_trk_rel_jet_pt"]     = jets_arr["sublead_trk_pt"] / jets_arr["pt"]
     #jets_arr["lead_trk_rel_system_pt"]     = jets_arr["lead_trk_pt"] / jets_arr["sum_trk_pt"]
+    #jets_arr["sublead_trk_rel_jet_pt"]     = jets_arr["sublead_trk_pt"] / jets_arr["pt"]
     #jets_arr["sublead_trk_rel_system_pt"]  = jets_arr["sublead_trk_pt"] / jets_arr["sum_trk_pt"]
     # trk multi and trk to jet dR
-    n_valid_trks = np.sum(tracks_arr["valid"], axis=1)
-    jets_arr["trk_multi"] = n_valid_trks
-    #jets_arr["mean_trk_jet_dR"]  = np.sum(tracks_arr["trk_jet_dR"], axis=1) / np.maximum(n_valid_trks, 1)
-    #jets_arr["max_trk_jet_dR"]   = np.max(tracks_arr["trk_jet_dR"], axis=1)
-    #lead_trk_pt_idx = np.argmax(tracks_arr["pt"], axis=1)
-    #jets_arr["lead_trk_dR"]  = tracks_arr["trk_jet_dR"][lead_trk_pt_idx]
+    #jets_arr["mean_trk_jet_dr"]  = np.sum(tracks_arr["trk_jet_dR"], axis=1) / np.maximum(n_valid_trks, 1)
+    #jets_arr["max_trk_jet_dr"]   = np.max(tracks_arr["trk_jet_dR"], axis=1)
+    #lead_trk_idx                 = np.argmax(tracks_arr["pt"], axis=1)
+    #jets_arr["lead_trk_dr"]      = tracks_arr["trk_jet_dR"][lead_trk_pt_idx]
+
+    # ── 5. Assemble ATLAS specific output arrays ──────────────────────────────
+    # setup for getting ATLAS vars
+    # apply ATLAS 2025 event selection
+    atlas_trk_mask = (
+            (tracks_arr["valid"] == True) &             # only look at valid tracks
+            (tracks_arr["jet_trk_dr"] < DR_MATCH) &     # within jet dR
+            (tracks_arr["pt"] > 0.5) &                  # with pt > 500 MeV
+            (np.abs(tracks_arr["eta"]) < JET_ETA_MAX)   # and abs(eta) < 2.5
+    )                                                   # (N jets, N tracks)
+
+    # ATLAS paper requires jets to have >= 2 trks
+    n_atlas_trks = np.sum(atlas_trk_mask, axis=1)    # Column of N jets (N jets, 1)
+    atlas_jet_mask = (n_atlas_trks >= 2)             # make >= 2 mask   (N jets, 1)
+
+    jets_arr["atlas_valid"] = atlas_jet_mask         # flag events valid under ATLAS criteria
+
+    # zero out pt of trks that fail ATLAS trk criteria
+    filtered_tracks = tracks_arr.copy()                                            # (N jets, N tracks)
+    filtered_tracks["pt"] = np.where(atlas_trk_mask, filtered_tracks["pt"], 0.0)   # (N jets, N tracks),
+
+    #=================
+    # ATLAS HZa 2025 variables
+    #=================
+    # trk multiplicity, zero out ATLAS invalid events
+    jets_arr["trk_multi"] = np.where(atlas_jet_mask, n_atlas_trks, 0)              # (N jets,)
+
+    #=================
+    # lead jet to trk dr
+    #=================
+    # sum and lead trk info
+    sum_trk_pt = np.sum(filtered_tracks["pt"], axis=1) # lead and sum trk pt info,    (N jets,)
+    lead_trk_pt = np.max(filtered_tracks["pt"], axis=1)                             # (N jets,)
+    lead_trk_idxs = np.argmax(filtered_tracks["pt"], axis=1)                        # (N jets,)
+
+    # get lead dr info
+    row_indices = np.arange(n_sel_total)
+    lead_trk_dr = filtered_tracks["jet_trk_dr"][row_indices, lead_trk_idxs]
+
+    # final lead trk dr and lead trk pt rel system pt, zero out ATLAS invalid events
+    jets_arr["lead_trk_rel_system_pt"] = np.where(atlas_jet_mask & (sum_trk_pt > 0), lead_trk_pt / sum_trk_pt, 0.0)  # (N jets,)
+    jets_arr["lead_trk_dr"] = np.where(atlas_jet_mask, lead_trk_dr, 0.0)                                             # (N jets,)
+
+    #=================
+    # angularity
+    #=================
+    valid_trk_mask = filtered_tracks["pt"] > 0 # filter for invalid tracks, recall above these were set to 0
+
+    angles = np.zeros_like(filtered_tracks["jet_trk_dr"]) # column of 0s (N jets, 1)
+    np.divide(
+        np.pi * filtered_tracks["jet_trk_dr"],  # numerator
+        (2.0 * DR_MATCH),                      # denominator
+        out=angles,                            # save to angles var
+        where=valid_trk_mask                   # only perform on valid tracks
+    )
+
+    sin_terms = np.where(valid_trk_mask, np.sin(angles), 1.0) # only perform on valid tracks, else set to 1.0
+    sin2s = sin_terms ** -2
+    cos_terms = (1.0 - np.cos(angles)) ** 3
+    trk_angularity_contributions = filtered_tracks["pt"] * sin2s * cos_terms # multiply sum terms
+
+    angularities = np.sum(trk_angularity_contributions, axis=1) # sum trk angularities, (N jets,)
+    jets_arr["angularity_n2"] = np.where(
+        atlas_jet_mask & (jets_arr["mass"] > 0), # divide by jet mass if > 0 and ATLAS valid, else set to 0
+        angularities / jets_arr["mass"],
+        0
+    )
+
+    #=================
+    # energy correlation functions ( U_1(0.7), M_2(0.3) )
+    #=================
+    u1_0p7, _              = compute_ecfs(filtered_tracks["pt"],
+                                          filtered_tracks["eta"],
+                                          filtered_tracks["phi"],
+                                          jets_arr["pt"],  beta=0.7, calc_e3=False)
+    ecf2_1_0p3, ecf3_1_0p3 = compute_ecfs(filtered_tracks["pt"],
+                                          filtered_tracks["eta"],
+                                          filtered_tracks["phi"],
+                                          jets_arr["pt"], beta=0.3, calc_e3=True)
+
+    jets_arr["U1_0p7"] = np.where(atlas_jet_mask, u1_0p7, 0.0)
+    m2 = np.where(ecf2_1_0p3 > 0, ecf3_1_0p3 / ecf2_1_0p3, 0.0) # avoid divide by zero
+    jets_arr["M2_0p3"] = np.where(atlas_jet_mask, m2, 0.0)      # zero if not ATLAS valid
+
+    #=================
+    # N-subjettiness tau2
+    #=================
+    n_subjets = 2
+    subjet_radius = 0.2
+    jet_radius = 0.4
+
+    # get subjet axes row by row
+    axes_list = []
+    invalid_subjet_mask = ~atlas_jet_mask.copy()
+    # set all the jets that pass to false, and the fails to true, used in tau_2_results to set failed jets to -999999.0
+
+    for i in range(n_sel_total):
+        if not atlas_jet_mask[i]:
+            # skip jets that failed ATLAS checks
+            axes_list.append(np.zeros((n_subjets, 2)))
+            continue
+
+        # get valid trks for this jet (row)
+        mask = filtered_tracks["pt"][i] > 0
+        eta = filtered_tracks["eta"][i][mask]
+        phi = filtered_tracks["phi"][i][mask]
+        pt  = filtered_tracks["pt"][i][mask]
+
+        # find subjet axis from this jet's trks
+        axes = find_kt_subjets_numpy(eta, phi, pt, n_subjets, subjet_radius)
+
+        if axes is None:
+            # jet didn't have enough tracks to satisfy n_subjets, happens when num trks < 2
+            axes_list.append(np.zeros((n_subjets, 2)))
+            invalid_subjet_mask[i] = True
+        else:
+            axes_list.append(axes)
+
+    # make axis list into matrix of shape (N_atlas_jets, n_subjets, 2)
+    subjet_axes_arr = np.array(axes_list)
+
+    # 2. Run the vectorized batch calculator for Tau_2
+    tau_2_results = compute_batch_nsubjettiness(filtered_tracks, subjet_axes_arr, jet_radius)
+
+    # replace events where clustering was impossible
+    tau_2_results = np.where(invalid_subjet_mask, -999999.0, tau_2_results)
+
+    # add to output array
+    jets_arr["tau2"] = tau_2_results
 
     # ── 5. PFCand → GenCands truth labels (absent in data → silently skipped) ──
     try:
@@ -286,7 +574,6 @@ def process_events(events) -> dict[str, np.ndarray]:
         pass  # background (data) files have no GenCands — leave fields at 0
 
     return {"jets": jets_arr, "tracks": tracks_arr, "labels": labels_arr}
-
 
 def _empty_arrays():
     return {
