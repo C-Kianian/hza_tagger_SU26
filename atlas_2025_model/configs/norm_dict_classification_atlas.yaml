@@ -1,0 +1,26 @@
+jets:
+  regression_a_mass:
+    mean: 0.0
+    std: 1.0
+  trk_multi:
+    mean: 6.747591
+    std: 4.716777
+  lead_trk_rel_system_pt:
+    mean: 0.596498
+    std: 0.309525
+  lead_trk_dr:
+    mean: 0.043517
+    std: 0.050644
+  angularity_n2:
+    mean: 0.226933
+    std: 0.149202
+  U1_0p7:
+    mean: 0.058799
+    std: 0.04519
+  M2_0p3:
+    mean: 0.081494
+    std: 0.072056
+  tau2:
+    mean: -45623.734375
+    std: 208667.546875
+tracks: {}

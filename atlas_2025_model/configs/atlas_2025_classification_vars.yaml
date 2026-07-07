@@ -1,0 +1,13 @@
+# Variable lists for the ATLAS HZa binary tagger
+# Keep in sync with common/variables.py
+
+jets:
+  - name: regression_a_mass 
+  - name: trk_multi
+  - name: lead_trk_rel_system_pt
+  - name: lead_trk_dr
+  - name: angularity_n2
+  - name: U1_0p7
+  - name: M2_0p3
+  - name: tau2
+

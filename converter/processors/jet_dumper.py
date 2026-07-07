@@ -541,7 +541,7 @@ def process_events(events) -> dict[str, np.ndarray]:
     # make axis list into matrix of shape (N_atlas_jets, n_subjets, 2)
     subjet_axes_arr = np.array(axes_list)
 
-    # 2. Run the vectorized batch calculator for Tau_2
+    # vectorized batch calculator for N = 2 subjettiness
     tau_2_results = compute_batch_nsubjettiness(filtered_tracks, subjet_axes_arr, jet_radius)
 
     # replace events where clustering was impossible

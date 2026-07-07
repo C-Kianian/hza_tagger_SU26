@@ -1,0 +1,89 @@
+name: linear_mass_regression
+
+model:
+  lrs_config:
+    initial: 1e-7
+    max: 1e-3           
+    end: 1e-6
+    pct_start: 0.05
+    weight_decay: 1e-10
+
+  model:
+    class_path: salt.models.SaltModel
+    init_args:
+      init_nets:
+        - input_name: jets
+          dense_config:
+            input_size: 8
+            hidden_layers: [10, 10, 10]
+            output_size: 10
+            activation: &activation ReLU
+
+      tasks:
+        class_path: torch.nn.ModuleList
+        init_args:
+          modules:
+            - class_path: salt.models.RegressionTask
+              init_args:
+                name: jet_regression
+                input_name: jets
+                label: a_jet
+                loss: torch.nn.HuberLoss
+                dense_config:
+                  input_size: 10
+                  output_size: 1  
+                  hidden_layers: []
+                  activation: *activation
+
+data:
+  train_file: path/to/train/file
+  val_file:   path/to/val/file
+  test_file:  path/to/test/file
+  norm_dict:  atlas_2025_model/configs/norm_dict_w_mass.yaml
+  class_dict: null
+  batch_size: 100
+  num_workers: 20
+  num_train: -1
+  num_val: -1
+  num_test: -1
+
+  labels:
+    jets:
+      - a_jet
+
+  variables:
+    jets:
+      - regression_a_mass
+      - trk_multi
+      - lead_trk_rel_system_pt
+      - lead_trk_dr
+      - angularity_n2
+      - U1_0p7
+      - M2_0p3
+      - tau2
+
+
+trainer:
+  max_epochs: 29
+  accelerator: auto   # set to "gpu" on NAF
+  devices: 1
+  log_every_n_steps: 50
+  default_root_dir: atlas_logs
+
+  logger:
+    class_path: lightning.pytorch.loggers.CometLogger
+    init_args:
+      project_name: atlas_2025
+      save_dir: atlas_logs
+      offline: false
+      display_summary_level: 0
+
+  callbacks:
+    - class_path: salt.callbacks.Checkpoint
+      init_args:
+        monitor_loss: val/jets_classification_loss
+    - class_path: lightning.pytorch.callbacks.LearningRateMonitor
+    - class_path: lightning.pytorch.callbacks.TQDMProgressBar
+      init_args: { refresh_rate: 50 }
+    - class_path: lightning.pytorch.callbacks.ModelSummary
+      init_args: { max_depth: 2 }
