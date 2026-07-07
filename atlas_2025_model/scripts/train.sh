@@ -143,7 +143,7 @@ export TEST_FILE="${TEST_FILE}"
 NORM_DICT=atlas_2025_model/configs/norm_dict_classification_atlas.yaml
 if [[ "$REGRESS" == true ]]; then
     echo "==> Using norm dict yaml for regression …"
-    CONFIG=atlas_2025_model/configs/norm_dict_regression_atlas.yaml
+    NORM_DICTG=atlas_2025_model/configs/norm_dict_regression_atlas.yaml
 fi
 
 NAME=atlas_2025_classifier_$(date +%Y%m%d_%H%M%S)
@@ -223,16 +223,16 @@ TRAIN_STATUS=$?
 LATEST_DIR=$(ls -td logs/hza_tagger_* 2>/dev/null | head -n 1)
 
 # 3. Rename it to your specified $NAME variable
-if [[ -d "$LATEST_DIR" && "$LATEST_DIR" != "logs/${RENAME}" ]]; then
-    echo "==> Clean up: Moving output directory to logs/${RENAME}"
+if [[ -d "$LATEST_DIR" && "$LATEST_DIR" != "atlas_logs/${RENAME}" ]]; then
+    echo "==> Clean up: Moving output directory to atlas_logs/${RENAME}"
 
     # Safety check: if target directory exists, append a small safety flag
-    if [[ -d "logs/${RENAME}" ]]; then
-        SAFE_NAME="logs/${RENAME}_fallback_$(date +%H%M%S)"
+    if [[ -d "atlas_logs/${RENAME}" ]]; then
+        SAFE_NAME="atlas_logs/${RENAME}_fallback_$(date +%H%M%S)"
         echo "    [Warning] logs/${RENAME} already exists! Saving to ${SAFE_NAME} instead."
         mv "$LATEST_DIR" "$SAFE_NAME"
     else
-        mv "$LATEST_DIR" "logs/${RENAME}"
+        mv "$LATEST_DIR" "atlas_logs/${RENAME}"
     fi
 else
     echo "==> Clean up: No matching timestamped directory found to rename."

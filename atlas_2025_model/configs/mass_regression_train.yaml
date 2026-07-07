@@ -13,6 +13,7 @@ model:
     init_args:
       init_nets:
         - input_name: jets
+          attach_global: false
           dense_config:
             input_size: 7
             hidden_layers: [35, 35, 35, 35]
@@ -49,6 +50,10 @@ data:
   num_train: -1
   num_val: -1
   num_test: -1
+  # ADD THESE TWO LINES HERE
+  non_finite_to_num: true
+  ignore_finite_checks: false  # Keeps guardrails up but fixes the numbers
+
   variables:
     jets:
       - trk_multi
