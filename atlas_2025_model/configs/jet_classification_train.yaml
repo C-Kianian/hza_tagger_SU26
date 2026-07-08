@@ -1,4 +1,4 @@
-name: linear_mass_regression
+name: atlas_jet_classification
 
 model:
   lrs_config:
@@ -23,12 +23,15 @@ model:
         class_path: torch.nn.ModuleList
         init_args:
           modules:
-            - class_path: salt.models.RegressionTask
+            - class_path: salt.models.ClassificationTask
               init_args:
-                name: jet_regression
+                name: jet_classification
                 input_name: jets
                 label: a_jet
-                loss: torch.nn.HuberLoss
+                loss:
+                  class_path: torch.nn.BCEWithLogitsLoss
+                  init_args:
+                    weight: [1.0,1.0] # ADD REWEIGHTING HERE [BKG,SIG]
                 dense_config:
                   input_size: 10
                   output_size: 1  
@@ -50,6 +53,9 @@ data:
   labels:
     jets:
       - a_jet
+
+  input_map:
+    jets: jets
 
   variables:
     jets:

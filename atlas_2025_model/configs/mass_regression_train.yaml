@@ -1,4 +1,4 @@
-name: linear_mass_regression
+name: atlas_mass_regression
 
 model:
   lrs_config:
@@ -53,6 +53,10 @@ data:
   # ADD THESE TWO LINES HERE
   non_finite_to_num: true
   ignore_finite_checks: false  # Keeps guardrails up but fixes the numbers
+
+
+  input_map:
+    jets: jets
 
   variables:
     jets:

@@ -78,6 +78,10 @@ data:
     jets:
       - a_jet
 
+  input_map:
+    jets: jets
+    tracks: tracks
+
   variables:
     jets:
       - pt
