@@ -1,5 +1,6 @@
-# Variable lists for the HZa binary tagger — consumed by hza_train.yaml
+# Variable lists for the HZa binary tagger — these are the variables to normalize
 # Keep in sync with common/variables.py
+
 
 jets:
   - name: pt

@@ -81,7 +81,8 @@ data:
   input_map:
     jets: jets
     tracks: tracks
-
+     
+  # these are the variables actually used to train on
   variables:
     jets:
       - pt

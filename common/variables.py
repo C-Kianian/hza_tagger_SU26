@@ -92,7 +92,7 @@ GenPart = GENPART_BRANCHES
 GENPART_BRANCHES = GenPart
 
 # ── Feature variable lists (used in SALT configs) ────────────────────────────
-
+# These are the list of features to extract from the root to the h5
 JET_FEATURES = ["pt", "eta", "phi", "mass"]
 
 TRACK_FEATURES = [

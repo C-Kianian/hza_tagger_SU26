@@ -19,6 +19,7 @@ JET_DTYPE = np.dtype([
     ("eta",                                 np.float32),
     ("phi",                                 np.float32),
     ("mass",                                np.float32),
+    ("regression_a_mass",                   np.float32), # for our specific regression output later, after initial write this is all 0
 
     # Truth labels for jet-classification task
     ("a_jet",                               np.int32),    # truth label: 1=a-jet, 0=background
@@ -34,13 +35,14 @@ JET_DTYPE = np.dtype([
 
     # ATLAS specific features (available for all jets, set = 0 for those that fail ATLAS criteria)
     ("atlas_valid",                         np.bool_),    # flag for events passing ATLAS criteria
+    ("atlas_regression_a_mass",             np.float32),  # for atlas regression output later, after initial write this is all 0
     ("trk_multi",                           np.int32),    # number of tracks in jet
     ("lead_trk_rel_system_pt",              np.float32),  # lead trk pt / sum trk pt
     ("lead_trk_dr",                         np.float32),  # dR of leading trk to jet
     ("angularity_n2",                       np.float32),  # angularity with n = 2, see arXiv:0807.0234
     ("U1_0p7",                              np.float32),  # Energy correlation function U, i=1, beta=0.7, see arXiv:1609.07483
     ("M2_0p3",                              np.float32),  # Energy correlation function M, i=2, beta=0.3, see arXiv:1609.07483
-    ("tau2",                                np.int32),    # N(=2) subjettiness, (subjet_radius=0.2, jet_radius=0.4) see arXiv:1011.2268
+    ("tau2",                                np.float32),    # N(=2) subjettiness, (subjet_radius=0.2, jet_radius=0.4) see arXiv:1011.2268
 
     # Other features, coded but unused
     #("sum_trk_pt",                         np.float32), # relative, sum, sub, and leading pTs
@@ -71,8 +73,8 @@ TRACK_DTYPE = np.dtype([
     ("dzSig",       np.float32),
     ("trkQuality",  np.int8),
     ("puppiWeight", np.float32),
-    ("jet_trk_dr",  np.float32),  #jet to trk dR, added for ATLAS criteria
-    #("trk_trk_dR",  np.float32), #trk to trk dR
+    ("jet_trk_dr",  np.float32),  #trk to trk dR
+    #("trk_trk_dr",  np.float32), #trk to trk dR
     ("valid",       np.bool_),   # False for padding slots
     # Truth labels for node-classification auxiliary task (0 when unavailable)
     ("truth_pdgId", np.int32),

@@ -93,6 +93,7 @@ data:
     tracks: tracks
     EDGE: tracks
 
+      # the variables used in training set here
   variables:
     jets:
       - pt

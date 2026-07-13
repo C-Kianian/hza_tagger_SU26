@@ -41,7 +41,7 @@ VARIABLES=tagger/configs/hza_variables.yaml
 
 # mass specific norm dict, avoids recalculating
 if [[ -n "${MASS:-}" ]]; then
-    NORM_DICT="tagger/configs/norm_dict_mA${MASS}.yaml"
+    NORM_DICT="tagger/configs/mass_specific_norm_dicts/norm_dict_mA${MASS}.yaml"
     echo "Mass specified, creating mass specific dict: ${NORM_DICT}"
 else
     echo "No mass specified, defaulting to generic name: tagger/configs/norm_dict.yaml"

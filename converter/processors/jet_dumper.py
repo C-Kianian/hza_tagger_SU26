@@ -368,6 +368,7 @@ def process_events(events) -> dict[str, np.ndarray]:
     jets_arr["eta"]                 = flat_jet_eta
     jets_arr["phi"]                 = flat_jet_phi
     jets_arr["mass"]                = _flat(jets_sel.mass)
+    jets_arr["regression_a_mass"]   = np.zeros(n_sel_total, dtype=np.float32)
     jets_arr["a_jet"]               = labels_sel
     jets_arr["truth_pt"]            = truth_pt_sel
     jets_arr["truth_mass"]          = truth_mass_sel
@@ -422,8 +423,8 @@ def process_events(events) -> dict[str, np.ndarray]:
     #jets_arr["lead_trk_dr"]      = tracks_arr["trk_jet_dR"][lead_trk_pt_idx]
 
     # ── 5. Assemble ATLAS specific output arrays ──────────────────────────────
-    # setup for getting ATLAS vars
-    # apply ATLAS 2025 event selection
+    # setup for getting ATLAS vars, apply ATLAS 2025 event selection
+    jets_arr["atlas_regression_a_mass"] = np.zeros(n_sel_total, dtype=np.float32)
     atlas_trk_mask = (
             (tracks_arr["valid"] == True) &             # only look at valid tracks
             (tracks_arr["jet_trk_dr"] < DR_MATCH) &     # within jet dR

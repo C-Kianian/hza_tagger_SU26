@@ -59,7 +59,7 @@ data:
 
   variables:
     jets:
-      - regression_a_mass
+      - atlas_regression_a_mass
       - trk_multi
       - lead_trk_rel_system_pt
       - lead_trk_dr

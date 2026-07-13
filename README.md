@@ -119,6 +119,13 @@ On DESY NAF GPU nodes, add `--trainer.accelerator gpu --trainer.devices 1` to `t
 
 `train.sh` sources `.env` on every run and passes the key to `CometLogger`. Without a key it falls back to offline mode (logs saved under `logs/`).
 
+### 6.1 Preprocess + train (ATLAS version)
+```bash
+python atlas_2025_model/scripts/event_mask.py --infile /path/to/data --outdir /path/to/dir --mask sample_name     # applies ATLAS selection criteria
+bash tagger/scripts/preprocess.sh /path/to/your/train/file              					   # computes normalisation dict
+bash tagger/scripts/train.sh      /path/to/your/train/file /path/to/your/val/file /path/to/your/test/file          # launches SALT training
+```
+
 ### 7. Evaluate
 
 The evaluation script auto-discovers the test H5 file, the most recent checkpoint, and the training config from the standard project layout:

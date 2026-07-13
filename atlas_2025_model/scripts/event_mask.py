@@ -8,16 +8,16 @@ import sys
 
 def parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--file", required=True, help="Input H5 file to filter")
-    p.add_argument("--out-dir", help="Output directory")
-    p.add_argument("--mask-name", default="atlas_valid", help="Name of the mask variable")
+    p.add_argument("--infile", required=True, help="Input H5 file to filter")
+    p.add_argument("--outdir", help="Output directory")
+    p.add_argument("--mask", default="atlas_valid", help="Name of the mask variable")
     return p.parse_args()
 
 def main():
     args = parse_args()
-    infile = Path(args.file)
-    mask_name = args.mask_name
-    out_dir = args.out_dir
+    infile = Path(args.infile)
+    mask_name = args.mask
+    out_dir = args.outdir
 
     if not infile.exists():
         print(infile)
