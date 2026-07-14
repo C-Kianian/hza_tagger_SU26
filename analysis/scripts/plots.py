@@ -21,6 +21,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+def str2bool(v):
+    if isinstance(v, bool): return v
+    if v.lower() in ("true", "t", "yes", "y", "1"): return True
+    if v.lower() in ("false", "f", "no", "n", "0"): return False
+    raise argparse.ArgumentTypeError("Expected true or false")
 
 def parse_args():
     p = argparse.ArgumentParser()
@@ -28,6 +33,7 @@ def parse_args():
     p.add_argument("--outdir", default="analysis/plots")
     p.add_argument("--wp",     type=float, nargs="+", default=[0.7, 0.85],
                    help="Signal efficiency working points for WP lines")
+    p.add_argument('--atlas', type=str2bool, default=False, help='include if evaluating ATLAS models')
     return p.parse_args()
 
 
@@ -39,7 +45,7 @@ def _load(scores_path: str):
     with h5py.File(scores_path, "r") as f:
         jets   = f[JETS_DATASET][:]
         labels = f[LABELS_DATASET]["a_jet"][:]
-        scores = f["scores"][:, 1]  # P(a_jet)
+        scores = f["scores"][:, 0] if args.atlas else scores = f["scores"][:, 1] # P(a_jet)
 
     pt   = jets["pt"]
     eta  = jets["eta"]

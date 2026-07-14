@@ -87,7 +87,7 @@ def main():
 
     from common.io import JETS_DATASET, TRACKS_DATASET
 
-    with h5py.File(args.input, "r") as fin, h5py.File(args.output, "a") as fout:
+    with (h5py.File(args.input, "r") as fin, h5py.File(args.output, "a") as fout):
         # use jet dataset for count of n events
         primary_jet_ds = input_map.get("jets", "jets")
         raw_jets = fin[primary_jet_ds]
@@ -95,7 +95,7 @@ def main():
         n_jets = fin[primary_jet_ds].shape[0] # n events
 
         ds_name = "predictions" if args.regression else "scores"
-        ds_shape = (n_jets, 1) if args.regression else (n_jets, 2)
+        ds_shape = (n_jets, 1) if args.regression or args.atlas else (n_jets, 2) # only our classifier outputs two predictions
 
         if ds_name in fout: # make empty scores dataset
             del fout[ds_name]
@@ -145,7 +145,7 @@ def main():
 
             if args.regression: # mass regression task
                 reg_scores = preds["jets"]["jet_regression"]
-                processed_outputs = reg_scores.cpu().numpy().squeeze(-1) # (num_selected_jets, )
+                processed_outputs = reg_scores.cpu().numpy().squeeze(-1) # (num_selected_jets,)
 
                 batch_mass = fout[primary_jet_ds]['regression_a_mass', start:stop] # get mass preds for the batch
                 batch_mass[selection_mask] = processed_outputs # update the jets passing selection criteria
@@ -154,8 +154,8 @@ def main():
                 processed_outputs = processed_outputs[:, np.newaxis]
             else: # classification task
                 # preds is a dict: {"jets": {"jets_classification": logits}}
-                logits = preds["jets"]["jets_classification"]                    # (B, 2)
-                processed_outputs  = torch.softmax(logits, dim=-1).cpu().numpy() # make into probs (B, 2)
+                logits = preds["jets"]["atlas_jet_classification"] if args.atlas else preds["jets"]["jets_classification"] # (B, out_dim), account for different loss funcs
+                processed_outputs = torch.sigmoid(logits).cpu().numpy() if args.atlas else torch.softmax(logits, dim=-1).cpu().numpy() # make into probs (B, out_dim)
 
             output_ds[start:stop] = processed_outputs # write batch predictions
             print(f"  {stop}/{n_jets} jets scored")

@@ -46,7 +46,7 @@ while [[ $# -gt 0 ]]; do
 	    ;;
     	 --regression) REGRESS=true; shift ;;
 	 --atlas)      ATLAS=true; shift ;;
-	 --plot)       plots=true; shift ;;
+	 --plot)       PLOTS=true; shift ;;
 	 *)
             POSITIONAL+=("$1")
             shift
@@ -168,23 +168,23 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "  Step 2 / 2  —  Producing plots"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 if [[ "${REGRESS}" == true ]]; then
-    if [[ "${ATLAS}" == true ]]; then 
-	"${PYTHON}" analysis/scripts/plots_regression.py \
+    if [[ "${ATLAS}" == true ]]; then # atlas regression case
+        "${PYTHON}" analysis/scripts/plots_regression.py \
         --scores "${SCORES_FILE}" \
-        --outdir "${PLOT_DIR}" \ 
-	--compare "atlas_regression_a_mass"
-    else
-    	"${PYTHON}" analysis/scripts/plots_regression.py \ 
-	--scores "${SCORES_FILE}" \
-	--outdir "${PLOT_DIR}" \
-        --compare "regression_a_mass"	
-    fi	    
-else
-    "${PYTHON}" analysis/scripts/plots.py \
+        --outdir "${PLOT_DIR}" \
+        --compare "atlas_regression_a_mass"
+    else # our regression model case
+        "${PYTHON}" analysis/scripts/plots_regression.py \
         --scores "${SCORES_FILE}" \
-        --outdir "${PLOT_DIR}"
+        --outdir "${PLOT_DIR}" \
+        --compare "regression_a_mass"
+    fi
+else # out jet classifier case
+      "${PYTHON}" analysis/scripts/plots.py \
+          --scores "${SCORES_FILE}" \
+          --outdir "${PLOT_DIR}" \
+	  --atlas  "${ATLAS}"
 fi
 
-
 echo ""
-#echo "✓  Done.  Plots written to ${PLOT_DIR}/"
+echo "✓  Done.  Plots written to ${PLOT_DIR}"
