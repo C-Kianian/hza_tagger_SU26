@@ -86,7 +86,7 @@ def main():
                 vals = vals[valid_mask]
             vals = vals[np.isfinite(vals)]
             norm["tracks"][var] = compute_stats(vals)
-            print(f"  tracks/{var}: mean={norm['tracks'][var]['mean']:.4f}  std={norm['tracks'][var]['std']:.4f}")
+            print(f"  tracks/{var}:         mean={norm['tracks'][var]['mean']:.4f}  std={norm['tracks'][var]['std']:.4f}")
 
     out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)

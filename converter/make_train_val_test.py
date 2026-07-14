@@ -30,7 +30,7 @@ from converter.processors.writer import H5Writer
 def parse_args():
     p = argparse.ArgumentParser(description="Split processed H5 files into train/val/test splits.")
     p.add_argument("-i", "--inputs", nargs="+", required=True, help="Input H5 file(s) or wildcards")
-    p.add_argument("--out-dir", required=True, type=str, help="Directory to save train.h5, val.h5, test.h5")
+    p.add_argument("--outdir", required=True, type=str, help="Directory to save train.h5, val.h5, test.h5")
     p.add_argument("--name", type=str, default='', help="name to be added to the files")
 
     # Split fractions
@@ -60,7 +60,7 @@ def main():
     print(f"Found {len(expanded_files)} input H5 files to split.")
 
     # ─── 2. SETUP SPLIT MATH & DIRECTORIES ───────────────────────────────────
-    outdir = Path(args.out_dir)
+    outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
 
     rng = np.random.default_rng(args.seed)
