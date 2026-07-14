@@ -11,6 +11,7 @@ def parse_args():
     p.add_argument("--infile", required=True, help="Input H5 file to filter")
     p.add_argument("--outdir", help="Output directory")
     p.add_argument("--mask", default="atlas_valid", help="Name of the mask variable")
+    p.add_argument("--dataset", default='jets', help="Which dataset in the h5 to search for mask, ie. jets, tracks, labels")
     return p.parse_args()
 
 def main():
@@ -18,6 +19,7 @@ def main():
     infile = Path(args.infile)
     mask_name = args.mask
     out_dir = args.outdir
+    dataset = args.dataset
 
     if not infile.exists():
         print(infile)
@@ -40,8 +42,19 @@ def main():
             return
         
         # 1. Read the boolean mask completely into RAM
-        bool_mask = fin['jets'][mask_name][:]
-        
+        bool_mask = fin[dataset][mask_name][:]
+
+        if bool_mask.dtype != np.bool_: # if mask is 0,1 turn into bool. useful for labels ie sig=1 bkg=0
+            unique = np.unique(bool_mask)
+            if np.all(np.isin(unique, [0, 1])):
+                bool_mask = bool_mask.astype(bool)
+            else:
+                raise ValueError(
+                f"{mask_name} is not a boolean mask or 0/1 labels. "
+                f"Found values: {unique}"
+                )
+
+
         with h5py.File(outfile, 'w') as fout:
             for key in fin.keys():
                 # Ensure we are dealing with a dataset, not a group attribute

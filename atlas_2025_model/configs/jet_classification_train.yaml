@@ -13,11 +13,15 @@ model:
     init_args:
       init_nets:
         - input_name: jets
+          attach_global: false # somehow prevents features from being duplicated
           dense_config:
             input_size: 8
             hidden_layers: [10, 10, 10]
             output_size: 10
             activation: &activation ReLU
+      
+      encoder: null
+      pool_net: null
 
       tasks:
         class_path: torch.nn.ModuleList
@@ -28,10 +32,12 @@ model:
                 name: jet_classification
                 input_name: jets
                 label: a_jet
+                class_names: [a_jet]
+                use_class_dict: false
                 loss:
                   class_path: torch.nn.BCEWithLogitsLoss
                   init_args:
-                    weight: [1.0,1.0] # ADD REWEIGHTING HERE [BKG,SIG]
+                    pos_weight: [1.0] # ADD REWEIGHTING HERE [BKG,SIG]
                 dense_config:
                   input_size: 10
                   output_size: 1  
@@ -42,13 +48,18 @@ data:
   train_file: path/to/train/file
   val_file:   path/to/val/file
   test_file:  path/to/test/file
-  norm_dict:  atlas_2025_model/configs/norm_dict_w_mass.yaml
+  norm_dict:  norm_dict_classification_atlas.yaml
   class_dict: null
   batch_size: 100
   num_workers: 20
   num_train: -1
   num_val: -1
   num_test: -1
+  # for handeling very large/negative numbers 
+  non_finite_to_num: true
+  ignore_finite_checks: false  # Keeps guardrails up but fixes the numbers
+
+
 
   labels:
     jets:
@@ -87,7 +98,7 @@ trainer:
   callbacks:
     - class_path: salt.callbacks.Checkpoint
       init_args:
-        monitor_loss: val/jets_classification_loss
+        monitor_loss: val/jet_classification_loss
     - class_path: lightning.pytorch.callbacks.LearningRateMonitor
     - class_path: lightning.pytorch.callbacks.TQDMProgressBar
       init_args: { refresh_rate: 50 }

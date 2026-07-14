@@ -50,7 +50,7 @@ data:
   num_train: -1
   num_val: -1
   num_test: -1
-  # ADD THESE TWO LINES HERE
+  # for handeling very large/negative numbers 
   non_finite_to_num: true
   ignore_finite_checks: false  # Keeps guardrails up but fixes the numbers
 
