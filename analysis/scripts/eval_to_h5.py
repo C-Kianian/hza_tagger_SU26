@@ -23,6 +23,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ("true", "t", "yes", "y", "1"):
+        return True
+    if v.lower() in ("false", "f", "no", "n", "0"):
+        return False
+    raise argparse.ArgumentTypeError("Expected true or false")
 
 def parse_args():
     p = argparse.ArgumentParser()
@@ -31,6 +39,8 @@ def parse_args():
     p.add_argument("--config", required=True)
     p.add_argument("--output", required=True)
     p.add_argument("--batch-size", type=int, default=2048)
+    p.add_argument('--atlas', type=str2bool, default=False, help='include if evaluating ATLAS models')
+    p.add_argument('--regression', type=str2bool, default=False, help='include if evaluating a regression model')
     return p.parse_args()
 
 
@@ -41,6 +51,7 @@ def main():
         import torch
         import h5py
         import numpy as np
+        import yaml
     except ImportError as e:
         print(f"Missing dependency: {e}")
         sys.exit(1)
@@ -58,6 +69,15 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model.to(device)
 
+    # Load the YAML Config
+    print(f"Loading configuration: {args.config}")
+    with open(args.config, "r") as f:
+        config = yaml.safe_load(f)
+
+    # get vars from the model training config
+    variables_config = config["data"]["variables"]
+    input_map = config["data"]["input_map"]
+
     # Copy input to output (preserves jets/tracks/labels).
     # Remove any stale output file first to avoid HDF5 lock errors on re-runs.
     out_path = Path(args.output)
@@ -68,68 +88,76 @@ def main():
     from common.io import JETS_DATASET, TRACKS_DATASET
 
     with h5py.File(args.input, "r") as fin, h5py.File(args.output, "a") as fout:
-        n_jets = fin[JETS_DATASET].shape[0]
+        # use jet dataset for count of n events
+        primary_jet_ds = input_map.get("jets", "jets")
+        raw_jets = fin[primary_jet_ds]
 
-        # Remove existing scores dataset if present (e.g. from a previous run)
-        if "scores" in fout:
-            del fout["scores"]
-        scores_ds = fout.create_dataset(
-            "scores", shape=(n_jets, 2), dtype=np.float32, compression="gzip"
-        )
+        n_jets = fin[primary_jet_ds].shape[0] # n events
 
+        ds_name = "predictions" if args.regression else "scores"
+        ds_shape = (n_jets, 1) if args.regression else (n_jets, 2)
+
+        if ds_name in fout: # make empty scores dataset
+            del fout[ds_name]
+        output_ds = fout.create_dataset(ds_name, shape=ds_shape, dtype=np.float32, compression="gzip")
+
+
+        # batch processing
         for start in range(0, n_jets, args.batch_size):
-            stop  = min(start + args.batch_size, n_jets)
-            jets_batch   = fin[JETS_DATASET][start:stop]
-            tracks_batch = fin[TRACKS_DATASET][start:stop]
+            stop = min(start + args.batch_size, n_jets)
 
-            # ── Jets: drop a_jet label, keep only kinematic input features ────
-            #jet_input_fields = [f for f in jets_batch.dtype.names if f != "a_jet"]
-            #jets_np = np.stack([jets_batch[f] for f in jet_input_fields], axis=-1).astype(np.float32)
-            #jets_t  = torch.from_numpy(jets_np).to(device)           # (B, n_jet_vars)
+            batch_jets = raw_jets[start:stop] # jets for this batch
 
-            # ── Tracks ────────────────────────────────────────────────────────
-            #track_input_fields = [f for f in tracks_batch.dtype.names if f != "valid"]
-            #tracks_np = np.stack(
-            #    [tracks_batch[f].astype(np.float32) for f in track_input_fields], axis=-1
-            #)                                                         # (B, T, n_track_vars)
-            #tracks_t  = torch.from_numpy(tracks_np).to(device)
-            #valid_t   = torch.from_numpy(tracks_batch["valid"]).to(device)  # (B, T) bool
-            #pad_mask  = ~valid_t                                      # True = padded
+            # if ATLAS apply ATLAS selection criteria
+            if args.atlas and "atlas_valid" in raw_jets.dtype.names:
+                selection_mask = batch_jets["atlas_valid"].astype(bool)
+            else:
+                selection_mask = np.ones(len(batch_jets), dtype=bool) # keep all if not specified
 
+            # if the entire batch fails, skip to the next batch
+            if not np.any(selection_mask):
+                continue
 
-            # ======================= VIBECODED FIX ==========================
-            # ── Jets: Explicitly select the 4 features the model expects ────
-            jet_input_fields = ["pt", "eta", "phi", "mass"]
-            jets_np = np.stack([jets_batch[f] for f in jet_input_fields], axis=-1).astype(np.float32)
-            jets_t  = torch.from_numpy(jets_np).to(device)           # (B, 4)
+            inputs = {}
+            pad_masks = {}
 
-            # ── Tracks: Explicitly select the features used during training ──
-            # (Explicitly listing these prevents a secondary crash if your track dataset has extra fields)
-            track_input_fields = [
-                "pt", "eta_rel", "phi_rel", "mass", "charge", 
-                "pdgId", "dxy", "dz", "dxySig", "dzSig", 
-                "trkQuality", "puppiWeight"
-            ]
-            tracks_np = np.stack(
-                [tracks_batch[f].astype(np.float32) for f in track_input_fields], axis=-1
-            )                                                                 # (B, T, n_track_vars)
-            tracks_t  = torch.from_numpy(tracks_np).to(device)
-            valid_t   = torch.from_numpy(tracks_batch["valid"]).to(device)  # (B, T) bool
-            pad_mask  = ~valid_t                                              # True = padded
+            # loop over all input streams defined in YAML
+            for input_name, var_list in variables_config.items():
+                # find the H5 dataset this group maps to (ie EDGE maps to tracks)
+                h5_dataset_name = input_map[input_name]
+                batch_data = fin[h5_dataset_name][start:stop]
+
+                filtered_batch = batch_data[selection_mask] # in case selection criteria applied
+
+                # stack only the variables listed in YAML
+                np_arr = np.stack([filtered_batch[v].astype(np.float32) for v in var_list], axis=-1)
+                inputs[input_name] = torch.from_numpy(np_arr).to(device)
+
+                # apply padding if applicable
+                if "valid" in batch_data.dtype.names:
+                    valid_t = torch.from_numpy(batch_data["valid"]).to(device)
+                    pad_masks[input_name] = ~valid_t  # True = padded/ignored
 
             # ── Forward pass ─────────────────────────────────────────────────
             # SALT 0.11 ModelWrapper.forward(inputs, pad_masks) → (preds, loss, ...)
-            inputs    = {"jets": jets_t, "tracks": tracks_t}
-            pad_masks = {"tracks": pad_mask}
-
             with torch.no_grad():
                 preds, *_ = model(inputs, pad_masks)
 
-            # preds is a dict: {"jets": {"jets_classification": logits}}
-            logits = preds["jets"]["jets_classification"]             # (B, 2)
-            probs  = torch.softmax(logits, dim=-1).cpu().numpy()
+            if args.regression: # mass regression task
+                reg_scores = preds["jets"]["jet_regression"]
+                processed_outputs = reg_scores.cpu().numpy().squeeze(-1) # (num_selected_jets, )
 
-            scores_ds[start:stop] = probs
+                batch_mass = fout[primary_jet_ds]['regression_a_mass', start:stop] # get mass preds for the batch
+                batch_mass[selection_mask] = processed_outputs # update the jets passing selection criteria
+                if args.atlas: fout[primary_jet_ds]['atlas_regression_a_mass', start:stop] = batch_mass # write info to file
+                else: fout[primary_jet_ds]['regression_a_mass', start:stop] = batch_mass # write info to file
+                processed_outputs = processed_outputs[:, np.newaxis]
+            else: # classification task
+                # preds is a dict: {"jets": {"jets_classification": logits}}
+                logits = preds["jets"]["jets_classification"]                    # (B, 2)
+                processed_outputs  = torch.softmax(logits, dim=-1).cpu().numpy() # make into probs (B, 2)
+
+            output_ds[start:stop] = processed_outputs # write batch predictions
             print(f"  {stop}/{n_jets} jets scored")
 
     print(f"\nScores written to: {args.output}")
@@ -137,3 +165,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
