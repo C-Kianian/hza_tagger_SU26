@@ -34,15 +34,13 @@ PYTHON="${PYTHON:-$(command -v python3 2>/dev/null || command -v python)}"
 # == get args ================================================================
 REGRESS=false
 RENAME=""
-MASK=""
 RW=false # to reweight
 
 POSITIONAL=()
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --rename=*)   RENAME="${1#*=}" ;;
-	--mask=*)     MASK="${1#*=}" ;;
+    	--rename=*)   RENAME="${1#*=}" ;;
 	--rw)         RW=true ;;
 	--regression) REGRESS=true ;;
 	*)
@@ -120,20 +118,6 @@ else
     TEST_FILE="$(_pick_h5  "${TEST_FILE}"  data/test.h5  data/test_out.h5)"
 fi
 
-# === Apply event mask to files ================================================
-if [[ -n "$MASK" ]]; then
-    info "Applying selection mask, preprocessing using mask: ${MASK}..."
-
-    # Run the Python filtering script and pass the custom mask name string
-    TRAIN_FILE=$("${PYTHON}" tagger/scripts/event_mask.py --file "${TRAIN_FILE}" --mask-name "${MASK}")
-    VAL_FILE=$("${PYTHON}" tagger/scripts/event_mask.py --file "${VAL_FILE}" --mask-name "${MASK}")
-    TEST_FILE=$("${PYTHON}" tagger/scripts/event_mask.py --file "${TEST_FILE}" --mask-name "${MASK}")
-
-    info "Masked Train file resolved to: ${TRAIN_FILE}"
-    info "Masked Val file resolved to:   ${VAL_FILE}"
-    info "Masked Test file resolved to:  ${TEST_FILE}"
-fi
-
 #export env variable
 export TRAIN_FILE="${TRAIN_FILE}"
 export VAL_FILE="${VAL_FILE}"
@@ -143,7 +127,7 @@ export TEST_FILE="${TEST_FILE}"
 NORM_DICT=atlas_2025_model/configs/norm_dict_classification_atlas.yaml
 if [[ "$REGRESS" == true ]]; then
     echo "==> Using norm dict yaml for regression …"
-    NORM_DICTG=atlas_2025_model/configs/norm_dict_regression_atlas.yaml
+    NORM_DICT=atlas_2025_model/configs/norm_dict_regression_atlas.yaml
 fi
 
 NAME=atlas_2025_classifier_$(date +%Y%m%d_%H%M%S)
@@ -184,19 +168,17 @@ if [[ "$REGRESS" == true ]]; then
 else
     if [[ "$RW" == true ]]; then    
         echo "==> Computing reweighting from ${TRAIN_FILE} …"
-        read -r W_BKG W_SIG < <("${PYTHON}" tagger/scripts/calc_reweight_vals.py --file "${TRAIN_FILE}")
+        read -r W_POS < <("${PYTHON}" tagger/scripts/calc_reweight_vals.py --file "${TRAIN_FILE}" --bce)
     else
-        W_BKG=1.0
-        W_SIG=1.0
+        W_POS=1.0
     fi
     
     #export env variable
-    export W_BKG=${W_BKG}
-    export W_SIG=${W_SIG}
+    export W_POS=${W_POS}
     
-    info "Background rw: ${W_BKG}, signal rw: ${W_SIG}"
+    info "Positive (signal) rw: ${W_POS}"
     echo ""
-    EXTRA_LOSS_ARGS="--model.model.init_args.tasks.init_args.modules.init_args.loss.init_args.weight=[${W_BKG},${W_SIG}]"
+    EXTRA_LOSS_ARGS="--model.model.init_args.tasks.init_args.modules.init_args.loss.init_args.pos_weight=[${W_POS}]"
 
 # == Traning classification ======================================================
    # begin training for classification
@@ -220,7 +202,11 @@ fi
 TRAIN_STATUS=$?
 
 # 2. Find the most recently modified directory matching the lightning pattern
-LATEST_DIR=$(ls -td logs/hza_tagger_* 2>/dev/null | head -n 1)
+LATEST_DIR=$(ls -td atlas_logs/*class* 2>/dev/null | head -n 1)
+if [[ "$REGRESS" == true ]]; then
+    LATEST_DIR=$(ls -td atlas_logs/*regress* 2>/dev/null | head -n 1)
+fi
+
 
 # 3. Rename it to your specified $NAME variable
 if [[ -d "$LATEST_DIR" && "$LATEST_DIR" != "atlas_logs/${RENAME}" ]]; then
@@ -229,7 +215,7 @@ if [[ -d "$LATEST_DIR" && "$LATEST_DIR" != "atlas_logs/${RENAME}" ]]; then
     # Safety check: if target directory exists, append a small safety flag
     if [[ -d "atlas_logs/${RENAME}" ]]; then
         SAFE_NAME="atlas_logs/${RENAME}_fallback_$(date +%H%M%S)"
-        echo "    [Warning] logs/${RENAME} already exists! Saving to ${SAFE_NAME} instead."
+        echo "    [Warning] atlas_logs/${RENAME} already exists! Saving to ${SAFE_NAME} instead."
         mv "$LATEST_DIR" "$SAFE_NAME"
     else
         mv "$LATEST_DIR" "atlas_logs/${RENAME}"

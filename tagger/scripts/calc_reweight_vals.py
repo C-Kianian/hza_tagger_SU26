@@ -3,13 +3,16 @@ import h5py
 
 parser = ArgumentParser()
 parser.add_argument('--file', type=str, required=True, help='space separated list of file(s) to analyze')
+parser.add_argument('--bce', action='store_true', help='set for BCE weight calculation')
 args = parser.parse_args()
 
 FILE = args.file
+BCE  = args.bce
 
 def calculate_reweight_vals(sig, bkg):
     n_bkg = len(bkg)
     n_sig = len(sig)
+    if BCE: return n_bkg/n_sig
     N_events = n_sig + n_bkg
 
     # calc reweight vals
@@ -21,15 +24,16 @@ def calculate_reweight_vals(sig, bkg):
     return w_bkg, w_sig
 
 def main():
-    with h5py.File(FILE, 'r') as f:
+    with (h5py.File(FILE, 'r') as f):
         labels = f["labels"]["a_jet"]
         is_sig = (labels == 1)
 
         # calc reweight vals
         sig_jets = f["jets"][is_sig]
         bkg_jets = f["jets"][~is_sig]
-        w_bkg, w_sig = calculate_reweight_vals(sig_jets, bkg_jets)
-        print(f"{w_bkg} {w_sig}")
+        if BCE: w_sig = calculate_reweight_vals(sig_jets, bkg_jets)
+        else: w_bkg, w_sig = calculate_reweight_vals(sig_jets, bkg_jets)
+        print(f"{w_bkg} {w_sig}") if not BCE else print(f"{w_sig}")
 
 if __name__ == '__main__':
     main()
