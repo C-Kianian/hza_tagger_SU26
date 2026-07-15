@@ -172,12 +172,12 @@ if [[ "${REGRESS}" == true ]]; then
         "${PYTHON}" analysis/scripts/plots_regression.py \
         --scores "${SCORES_FILE}" \
         --outdir "${PLOT_DIR}" \
-        --compare "atlas_regression_a_mass"
+    	--eval   "atlas_regression_a_mass"
     else # our regression model case
         "${PYTHON}" analysis/scripts/plots_regression.py \
         --scores "${SCORES_FILE}" \
         --outdir "${PLOT_DIR}" \
-        --compare "regression_a_mass"
+    	--eval  "regression_a_mass"
     fi
 else # out jet classifier case
       "${PYTHON}" analysis/scripts/plots.py \

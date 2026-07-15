@@ -20,15 +20,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-
 def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--scores", required=True, help="H5 file with evaluated datasets")
     p.add_argument("--outdir", default="analysis/plots")
+    p.add_argument('--eval', type=str, default="atlas_regression_a_mass", help='what regression name to evaluate')
     return p.parse_args()
 
 
-def _load(scores_path: str):
+def _load(scores_path: str, compare: str):
     import h5py
     import numpy as np
     from common.io import JETS_DATASET
@@ -54,8 +54,8 @@ def _load(scores_path: str):
     else:
         raise KeyError("Could not find true mass target 'truth_a_mass' in the H5 file.")
 
-    if "atlas_regression_a_mass" in jets.dtype.names:
-        pred_mass = jets["atlas_regression_a_mass"]
+    if compare in jets.dtype.names:
+        pred_mass = jets[compare]
     else:
         raise KeyError("Could not find predicted mass 'atlas_regression_a_mass' in the H5 file.")
 
@@ -73,6 +73,7 @@ def main():
     args = parse_args()
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
+    regress_name = args.eval
 
     try:
         import numpy as np
@@ -84,7 +85,7 @@ def main():
         sys.exit(1)
 
     # Load entries that passed validation selections
-    pt, eta, true_mass, pred_mass, a_jet = _load(args.scores)
+    pt, eta, true_mass, pred_mass, a_jet = _load(args.scores, regress_name)
 
     if len(true_mass) == 0:
         print("ERROR: No valid entries found after applying selection mask.")
@@ -92,6 +93,7 @@ def main():
 
     # Define the discrete target mass spectrum
     atlas_paper_masses = [0.5, 2.0, 3.5]
+    atlas_colors = ["Red", "Lime", "Blue", "Black"]
     all_masses = [0.5, 0.75, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 8.0]
 
     # Isolate sample indices into matching dictionary categories
@@ -108,9 +110,9 @@ def main():
         all_mass_masks["Background"] = (a_jet == 0)
     else:
         # Fallback if label column is missing: classify anything far from signal points as background
-        matched_signal = np.any([atlas_paper_masks[f"m = {m} GeV"] for m in atlas_paper_masses], axis=0)
+        atlas_matched_signal = np.any([atlas_paper_masks[f"m = {m} GeV"] for m in atlas_paper_masses], axis=0)
         matched_signal = np.any([all_mass_masks[f"m = {m} GeV"] for m in all_mass_masks], axis=0)
-        atlas_paper_masks["Background"] = ~matched_signal
+        atlas_paper_masks["Background"] = ~atlas_matched_signal
         all_mass_masks["Background"] = ~matched_signal
 
     # Use a distinct 20-color map so all 11 overlaid lines remain clearly distinguishable
@@ -118,7 +120,7 @@ def main():
 
     # ── 1. Separate Predicted Mass Distributions Overlay ────────────────────
     fig, ax = plt.subplots(figsize=(9, 6))
-    bins_dist = np.linspace(0.0, 12.0, 100)
+    bins_dist = np.linspace(0.0, 4.0, 100)
 
     for idx, (label, mask) in enumerate(atlas_paper_masks.items()):
         pred_sub = pred_mass[mask]
@@ -133,7 +135,7 @@ def main():
             linewidth=2,
             density=True,
             label=label,
-            color=colors[idx % len(colors)]
+            color=atlas_colors[idx]
         )
 
     ax.set_xlabel("Predicted Mass ($m_{pred}$) [GeV]")
@@ -148,7 +150,7 @@ def main():
 
     # ── 1. Separate Predicted Mass Distributions Overlay ────────────────────
     fig, ax = plt.subplots(figsize=(9, 6))
-    bins_dist = np.linspace(0.0, 12.0, 100)
+    bins_dist = np.linspace(0.0, 8.0, 100)
 
     for idx, (label, mask) in enumerate(all_mass_masks.items()):
         pred_sub = pred_mass[mask]
@@ -199,7 +201,7 @@ def main():
             linewidth=2,
             density=True,
             label=display_label,
-            color=colors[idx % len(colors)]
+            color=atlas_colors[idx]
         )
 
     ax.axvline(0, color="black", linestyle=":", alpha=0.7)
@@ -247,11 +249,9 @@ def main():
     fig.savefig(outdir / "all_mass_residuals.pdf", bbox_inches="tight")
     plt.close(fig)
     print("Saved all_mass_residuals.pdf")
-    
-    
-    
 
 
 if __name__ == "__main__":
     main()
+
 
