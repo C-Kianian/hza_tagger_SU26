@@ -129,14 +129,28 @@ def main():
 
                 filtered_batch = batch_data[selection_mask] # in case selection criteria applied
 
-                # stack only the variables listed in YAML
-                np_arr = np.stack([filtered_batch[v].astype(np.float32) for v in var_list], axis=-1)
-                np_arr = np.nan_to_num(np_arr, nan=-1.0, posinf=-1.0, neginf=-1.0) # remove placeholders
+                # Calc edge features on the fly since salt doesnt save to h5
+                if input_name.upper() == "EDGE":
+                    try:
+                        from salt.data.edge_features import get_inputs_edge
+                    except ImportError:
+                        print("Error: Could not import 'get_inputs_edge' from salt.data.edge_features.")
+                        print("Ensure SALT is correctly installed and accessible in your python path.")
+                        sys.exit(1)
+
+                    # calc from tracks
+                    np_arr = get_inputs_edge(filtered_batch, var_list)
+                else:
+                    # stack only the variables listed in YAML
+                    np_arr = np.stack([filtered_batch[v].astype(np.float32) for v in var_list], axis=-1)
+                    np_arr = np.nan_to_num(np_arr, nan=-1.0, posinf=-1.0, neginf=-1.0) # remove placeholders
+
+
                 inputs[input_name] = torch.from_numpy(np_arr).to(device)
 
                 # apply padding if applicable
-                if "valid" in batch_data.dtype.names:
-                    valid_t = torch.from_numpy(batch_data["valid"]).to(device)
+                if input_name == 'tracks' and "valid" in filtered_batch.dtype.names:
+                    valid_t = torch.from_numpy(filtered_batch["valid"]).to(device)
                     pad_masks[input_name] = ~valid_t  # True = padded/ignored
 
             # ── Forward pass ─────────────────────────────────────────────────

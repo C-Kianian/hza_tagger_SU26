@@ -34,6 +34,7 @@ PYTHON="${PYTHON:-$(command -v python3 2>/dev/null || command -v python)}"
 # == get args ================================================================
 ADD_NAME=""
 RW=false # to reweight
+EF=false # to calc edge features
 ND='' # specific norm dict
 
 POSITIONAL=()

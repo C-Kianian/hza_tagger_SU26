@@ -28,8 +28,7 @@ cd "${PROJECT_ROOT}"
 
 # add arg for which  dir to search for model checkpoint
 DIR="${DIR:-}"
-REGRESS=false
-ATLAS=false
+TRAIN_CFG="${TRAIN_CFG:-}" # arg for the training config
 PLOTS=false
 
 POSITIONAL=()
@@ -44,9 +43,15 @@ while [[ $# -gt 0 ]]; do
 	    DIR="${1#*=}"
 	    shift 1
 	    ;;
-    	 --regression) REGRESS=true; shift ;;
-	 --atlas)      ATLAS=true; shift ;;
-	 --plot)       PLOTS=true; shift ;;
+    	 --config)
+            TRAIN_CFG="$2"
+	    shift 2
+	    ;;
+	 --config=*)
+	   TRAIN_CFG="${1#*=}"
+	   shift 1
+	   ;;
+    	 --plot)       PLOTS=true; shift ;;
 	 *)
             POSITIONAL+=("$1")
             shift
@@ -117,26 +122,25 @@ fi
 info "Checkpoint: ${CKPT}"
 
 # ── Resolve TRAIN_CFG ─────────────────────────────────────────────────────────
-TRAIN_CFG="${TRAIN_CFG:-tagger/configs/hza_train.yaml}"
-if [[ "${ATLAS}" == true ]]; then
-    TRAIN_CFG=atlas_2025_model/configs/jet_classification_train.yaml
-    if [[ "${REGRESS}" == true ]]; then
-        TRAIN_CFG=atlas_2025_model/configs/mass_regression_train.yaml 
-    fi
-fi
-
 [[ -f "${TRAIN_CFG}" ]] || die "Training config not found: ${TRAIN_CFG}"
 info "Config:     ${TRAIN_CFG}"
+
+# get info from config
+ATLAS=$(python common/parse_yaml.py --contains atlas --config "${TRAIN_CFG}")
+REGRESS=$(python common/parse_yaml.py --contains regress --config "${TRAIN_CFG}")
 
 # ── Derive output paths ───────────────────────────────────────────────────────
 # Put scores next to the test file: test.h5 → test_scores.h5
 _base="$(basename "${TEST_FILE}" .h5)"
 _dir="$(dirname "${TEST_FILE}")"
-SCORES_FILE="${SCORES_FILE:-${_dir}/${_base}_scores.h5}"
+SCORES_FILE="${SCORES_FILE:-${_dir}/${_base}_model_scores.h5}"
+if [[ "${REGRESS}" == true ]]; then
+    SCORES_FILE="${SCORES_FILE:-${_dir}/${_base}_regression_scores.h5}"
+fi
 if [[ "${ATLAS}" == true ]]; then
-    SCORES_FILE="${SCORES_FILE:-${_dir}/${_base}_classification_scores.h5}"
+    SCORES_FILE="${SCORES_FILE:-${_dir}/${_base}_atlas_classification_scores.h5}"
     if [[ "${REGRESS}" == true ]]; then
-        SCORES_FILE="${SCORES_FILE:-${_dir}/${_base}_regression_scores.h5}"
+        SCORES_FILE="${SCORES_FILE:-${_dir}/${_base}_atlas_regression_scores.h5}"
     fi
 fi
 #PLOT_DIR="${PLOT_DIR:-analysis/plots}"
@@ -169,17 +173,20 @@ echo "  Step 2 / 2  —  Producing plots"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 if [[ "${REGRESS}" == true ]]; then
     if [[ "${ATLAS}" == true ]]; then # atlas regression case
+	PLOT_DIR="${PLOT_DIR}_atlas_regression"
         "${PYTHON}" analysis/scripts/plots_regression.py \
         --scores "${SCORES_FILE}" \
         --outdir "${PLOT_DIR}" \
     	--eval   "atlas_regression_a_mass"
     else # our regression model case
+	PLOT_DIR="${PLOT_DIR}_atlas_classifier"
         "${PYTHON}" analysis/scripts/plots_regression.py \
         --scores "${SCORES_FILE}" \
         --outdir "${PLOT_DIR}" \
     	--eval  "regression_a_mass"
     fi
 else # out jet classifier case
+      PLOT_DIR="${PLOT_DIR}_salt_classifier"
       "${PYTHON}" analysis/scripts/plots.py \
           --scores "${SCORES_FILE}" \
           --outdir "${PLOT_DIR}" \
