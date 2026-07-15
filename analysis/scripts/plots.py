@@ -45,7 +45,7 @@ def _load(scores_path: str):
     with h5py.File(scores_path, "r") as f:
         jets   = f[JETS_DATASET][:]
         labels = f[LABELS_DATASET]["a_jet"][:]
-        scores = f["scores"][:, 0] if args.atlas else scores = f["scores"][:, 1] # P(a_jet)
+        scores = f["scores"][:, 0] if parse_args().atlas else f["scores"][:, 1] # P(a_jet)
 
     pt   = jets["pt"]
     eta  = jets["eta"]

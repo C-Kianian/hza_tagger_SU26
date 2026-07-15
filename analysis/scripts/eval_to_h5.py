@@ -131,6 +131,7 @@ def main():
 
                 # stack only the variables listed in YAML
                 np_arr = np.stack([filtered_batch[v].astype(np.float32) for v in var_list], axis=-1)
+                np_arr = np.nan_to_num(np_arr, nan=-1.0, posinf=-1.0, neginf=-1.0) # remove placeholders
                 inputs[input_name] = torch.from_numpy(np_arr).to(device)
 
                 # apply padding if applicable
@@ -154,7 +155,7 @@ def main():
                 processed_outputs = processed_outputs[:, np.newaxis]
             else: # classification task
                 # preds is a dict: {"jets": {"jets_classification": logits}}
-                logits = preds["jets"]["atlas_jet_classification"] if args.atlas else preds["jets"]["jets_classification"] # (B, out_dim), account for different loss funcs
+                logits = preds["jets"]["jets_classification"] # (B, out_dim), account for different loss funcs
                 processed_outputs = torch.sigmoid(logits).cpu().numpy() if args.atlas else torch.softmax(logits, dim=-1).cpu().numpy() # make into probs (B, out_dim)
 
             output_ds[start:stop] = processed_outputs # write batch predictions

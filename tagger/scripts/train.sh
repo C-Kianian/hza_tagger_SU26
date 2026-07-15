@@ -11,10 +11,10 @@
 # Override via environment variables or positional args.
 #
 # Usage:
-#   bash tagger/scripts/train.sh                          # auto-discover everything
+#   bash tagger/scripts/train.sh                         # auto-discover everything
 #   bash tagger/scripts/train.sh data/train.h5 data/val.h5 data/test.h5
 #   bash tagger/scripts/train.sh --rw 			 # auto reweight a classification task
-#   bash tagger/scripts/train.sh --mass=4_0 	 	 # for a specific mass norm dict, default is 2_0
+#   bash tagger/scripts/train.sh --normdict=path/to/dict # for a specific mass norm dict, default is 2_0
 #   bash tagger/scripts/train.sh --rename=some_name_here # the name to rename the standard hza_tagger_YMD_HMS out directory
 #   bash tagger/scripts/train.sh --edg 			 # include to calculate edge features
 #
@@ -32,18 +32,18 @@ PYTHON="${CONDA_PREFIX:+${CONDA_PREFIX}/bin/python}"
 PYTHON="${PYTHON:-$(command -v python3 2>/dev/null || command -v python)}"
 
 # == get args ================================================================
-MASS=""
 ADD_NAME=""
 RW=false # to reweight
+ND='' # specific norm dict
 
 POSITIONAL=()
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --mass=*)     MASS="${1#*=}" ;;
         --rename=*)   RENAME="${1#*=}" ;;
         --rw)         RW=true ;;
 	--edg)        EF=true ;;
+	--normdict=*) ND="${1#*=}" ;;
 	*)
             POSITIONAL+=("$1")
             ;;
@@ -141,9 +141,9 @@ export W_BKG=${W_BKG}
 export W_SIG=${W_SIG}
 
 # == norm dict =================================================================
-MASS="${MASS:-}"
-if [[ -n "$MASS" ]]; then
-    NORM_DICT="tagger/configs/mass_specific_norm_dicts/norm_dict_mA${MASS}.yaml"
+ND="${ND:-}"
+if [[ -n "${ND}" ]]; then
+    NORM_DICT=${ND}
 else
     NORM_DICT="tagger/configs/norm_dict.yaml"
 fi
@@ -151,7 +151,7 @@ NAME=hza_tagger_$(date +%Y%m%d_%H%M%S)
 EXTRA_DATA_ARGS="--data.norm_dict ${NORM_DICT}"
 
 #export env variable
-export MASS=${MASS}
+export ND=${ND}
 
 info "Config:     ${CONFIG}"
 info "Train file: ${TRAIN_FILE}"

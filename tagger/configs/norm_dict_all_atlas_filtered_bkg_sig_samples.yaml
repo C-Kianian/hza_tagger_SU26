@@ -1,0 +1,50 @@
+jets:
+  pt:
+    mean: 48.530365
+    std: 30.337933
+  eta:
+    mean: 0.003723
+    std: 1.312855
+  phi:
+    mean: -0.00117
+    std: 1.814118
+  mass:
+    mean: 5.552233
+    std: 3.653062
+tracks:
+  pt:
+    mean: 5.658945
+    std: 12.057893
+  eta_rel:
+    mean: 7.8e-05
+    std: 0.155416
+  phi_rel:
+    mean: 8.0e-05
+    std: 0.156283
+  mass:
+    mean: 0.089661
+    std: 0.065639
+  charge:
+    mean: 0.010614
+    std: 0.824847
+  pdgId:
+    mean: 20.109674
+    std: 168.788849
+  dxy:
+    mean: 0.0
+    std: 1.0
+  dz:
+    mean: -0.33787
+    std: 4.960382
+  dxySig:
+    mean: 0.0
+    std: 1.0
+  dzSig:
+    mean: 0.0
+    std: 1.0
+  trkQuality:
+    mean: 3.39289
+    std: 2.332302
+  puppiWeight:
+    mean: 0.988676
+    std: 0.04454

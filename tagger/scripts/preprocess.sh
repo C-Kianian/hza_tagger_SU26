@@ -20,7 +20,16 @@ while [[ $# -gt 0 ]]; do
             MASS="$2"
             shift 2
             ;;
-        *)
+        --name=*)
+            NAME="${1#*=}"
+            shift
+            ;;
+        --name)
+            NAME="$2"
+            shift 2
+            ;;
+    
+    	*)
             POSITIONAL+=("$1")
             shift
             ;;
@@ -43,8 +52,10 @@ VARIABLES=tagger/configs/hza_variables.yaml
 if [[ -n "${MASS:-}" ]]; then
     NORM_DICT="tagger/configs/mass_specific_norm_dicts/norm_dict_mA${MASS}.yaml"
     echo "Mass specified, creating mass specific dict: ${NORM_DICT}"
+elif [[ -n "${NAME:-}" ]]; then
+    NORM_DICT="tagger/configs/norm_dict_${NAME}.yaml"
 else
-    echo "No mass specified, defaulting to generic name: tagger/configs/norm_dict.yaml"
+    echo "No mass or name specified, defaulting to generic name: tagger/configs/norm_dict.yaml"
     NORM_DICT=tagger/configs/norm_dict.yaml
 fi
 
