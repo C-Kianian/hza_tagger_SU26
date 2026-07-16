@@ -128,7 +128,7 @@ info "Config:     ${TRAIN_CFG}"
 # get info from config
 ATLAS=$(python common/parse_yaml.py --contains atlas --config "${TRAIN_CFG}")
 REGRESS=$(python common/parse_yaml.py --contains regress --config "${TRAIN_CFG}")
-
+CFG_NAME=$(python common/parse_yaml.py --get name --config "${TRAIN_CFG}")
 # ── Derive output paths ───────────────────────────────────────────────────────
 # Put scores next to the test file: test.h5 → test_scores.h5
 _base="$(basename "${TEST_FILE}" .h5)"
@@ -186,7 +186,7 @@ if [[ "${REGRESS}" == true ]]; then
     	--eval  "regression_a_mass"
     fi
 else # out jet classifier case
-      PLOT_DIR="${PLOT_DIR}_salt_classifier"
+      PLOT_DIR="${PLOT_DIR}_${CFG_NAME}"
       "${PYTHON}" analysis/scripts/plots.py \
           --scores "${SCORES_FILE}" \
           --outdir "${PLOT_DIR}" \
