@@ -133,7 +133,7 @@ CFG_NAME=$(python common/parse_yaml.py --get name --config "${TRAIN_CFG}")
 # Put scores next to the test file: test.h5 → test_scores.h5
 _base="$(basename "${TEST_FILE}" .h5)"
 _dir="$(dirname "${TEST_FILE}")"
-SCORES_FILE="${SCORES_FILE:-${_dir}/${_base}_model_scores.h5}"
+SCORES_FILE="${SCORES_FILE:-${_dir}/${_base}_salt_scores.h5}"
 if [[ "${REGRESS}" == true ]]; then
     SCORES_FILE="${SCORES_FILE:-${_dir}/${_base}_regression_scores.h5}"
 fi
@@ -144,10 +144,10 @@ if [[ "${ATLAS}" == true ]]; then
     fi
 fi
 #PLOT_DIR="${PLOT_DIR:-analysis/plots}"
-PLOT_DIR="${PLOT_DIR:-analysis/plots${_base:+_${_base}}}"
+PLOT_DIR="${PLOT_DIR:-analysis/plots${_base:+_${_base}}_salt}"
 
 info "Scores:     ${SCORES_FILE}"
-info "Plots dir:  ${PLOT_DIR}"
+#info "Plots dir:  ${PLOT_DIR}"
 echo ""
 
 # ── Step 1: score ─────────────────────────────────────────────────────────────
