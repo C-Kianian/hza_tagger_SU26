@@ -1,3 +1,5 @@
+import sys
+
 import h5py
 import numpy as np
 import matplotlib.pyplot as plt
@@ -6,14 +8,23 @@ import gc
 import hist
 from argparse import ArgumentParser
 from pathlib import Path
+try:
+    from salt.data.edge_features import get_inputs_edge # dont know how this import works, it doesnt appear in salt repo
+except ImportError:
+    print("Error: Could not import 'get_inputs_edge' from salt.data.edge_features.")
+    print("Ensure SALT is correctly installed and accessible in your python path.")
+    sys.exit(1)
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 hep.style.use("CMS")
 
 parser = ArgumentParser()
 parser.add_argument('--file', type=str, required=True, help='path to the file for analysis')
 parser.add_argument('--maxEvents', type=int, default=None, help='max amount of events to analyze')
-parser.add_argument('--plot', action='store_true', help='set true for all the plots to be made')
+parser.add_argument('--plot', action='store_true', help='set true for all the jet/track plots to be made')
 parser.add_argument('--atlas', action='store_true', help='set true for plots with ATLAS variables')
+parser.add_argument('--edg', action='store_true', help='set true for plots with edge features calculated')
 parser.add_argument("--outdir", default="analysis/default_plot_outdir")
 args = parser.parse_args()
 
@@ -23,6 +34,7 @@ MAX_EVENTS = args.maxEvents
 PLOT = args.plot
 ATLAS = args.atlas
 OUTDIR = args.outdir
+EDGE = args.edg
 hists = []
 
 def print_val(file):
@@ -86,7 +98,7 @@ def calculate_bin_edges(plots, n_bins_float=50):
 
     return ll, ul, n_bins_float + 1
 
-def plot_hist(to_plot, labels, x, name, y="Entries", norm=False, logy=False, logx=False, subdir=None):
+def plot_hist(to_plot, labels, x, name, y="Entries", norm=False, global_norm=False, logy=False, logx=False, subdir=None):
     # quick checks, ensure same lengths, less than color length, and non empty
     if len(to_plot) != len(labels): raise ValueError("to_plot and labels must have the same length")
     if len(to_plot) > 10: raise ValueError("Not enough colors for this many plots.")
@@ -104,12 +116,16 @@ def plot_hist(to_plot, labels, x, name, y="Entries", norm=False, logy=False, log
         del h
 
     # norm if specified
-    if norm:
+    # norm if specified
+    hists_sum = sum(h.sum() for h in hists)
+    if global_norm:
+        hists = [h / hists_sum for h in hists]
+        y = "Normalised entries"
+    elif norm:
         norm_hists = []
         for h in hists:
             if h.sum() == 0: norm_hists.append(h) # add even if empty
             else: norm_hists.append(h / h.sum())
-            del h
         hists = norm_hists
         y = "Normalised entries"
 
@@ -118,8 +134,9 @@ def plot_hist(to_plot, labels, x, name, y="Entries", norm=False, logy=False, log
     if logy: ax.set_yscale("log") # log if specified
     if logx: ax.set_xscale("log")
     colors = list(plt.cm.tab10.colors)
-    for l, h, c, plot in zip(labels, hists, colors, to_plot):
-        hep.histplot(h, ax=ax, label=f"{l} (N = {len(plot)})", color=c)
+    linestyles = ["-", "--", "-.", ":"]
+    for i, (l, h, c, plot) in enumerate(zip(labels, hists, colors, to_plot)):
+        hep.histplot(h, ax=ax, label=f"{l} (N = {len(plot)})", color=c, linestyle=linestyles[i % len(linestyles)])
     ax.set_xlabel(x)
     ax.set_ylabel(y)
     ax.legend()
@@ -173,6 +190,15 @@ def main():
                     "U1_0p7": r"$U_1^{0.7}$",
                     "M2_0p3": r"$M_2^{0.3}$",
                     "tau2": r"$\tau_2$ (N-Subjettiness)",
+                }
+            if EDGE:
+                edge_labels = {
+                    "dR": r"$\Delta R^{\mathrm{edge}}$",
+                    "kt":  r"$\mathrm{k_{t}} [GeV]$",
+                    "z":  r"$\mathrm{z}$",
+                    #"subjetIndex":  "Subjet Index", for now these are skipped as the energy info and the subjetIdk info is not stored
+                    #"mass": "$m^{edge} [GeV/c^{2}]$",
+                    "isSelfLoop":  "Is Self Loop" # always keep as last var, do not move
                 }
 
             trk_labels = {
@@ -335,6 +361,30 @@ def main():
                       name="trk_dR_mean", norm=True, subdir="derived_jet_plots")
             plot_hist(to_plot=[sig_max_dR, bkg_max_dR], labels=["Signal", "Background"], x=r"Max $\Delta R$",
                       name="trk_dR_max", norm=True, subdir="derived_jet_plots")
+
+            ############ (OPTIONAL) EDGE FEATURE INFO ###########
+            if EDGE:
+                try:
+                    edges = get_inputs_edge(tracks, edge_labels.keys()) # try to calc edge features (N events, N trks, N trks, num_edg_feats)
+                    feature_names = list(edge_labels.keys())
+                except ValueError as e:
+                    print(f"Issue when trying to calculate edge features: {e}")
+
+                feature_idx = {name: i for i, name in enumerate(feature_names)} # associate returned features with a name
+                self_loop  = edges[..., feature_idx["isSelfLoop"]] == 1.0
+
+                for edg_var, edg_xtitle in edge_labels.items():
+                    vals = edges[..., feature_idx[edg_var]] # get feature
+
+                    loop_vals = vals[self_loop] # seperate by self loops
+                    link_vals = vals[~self_loop]
+                    if edg_var == "isSelfLoop": 
+                        plot_hist(to_plot=[loop_vals, link_vals], labels=[r"$i=j$", r"$i \neq j$"], x=edg_xtitle, # plot
+                                  global_norm=True, logy=True, name=f"edge_{edg_var}", subdir="optional_edge_feature_plots")
+                        continue
+
+                    plot_hist(to_plot=[loop_vals, link_vals], labels=[r"$i=j$", r"$i \neq j$"], x=edg_xtitle, # plot
+                              norm=True, logy=True, name=f"edge_{edg_var}", subdir="optional_edge_feature_plots")
 
 
 

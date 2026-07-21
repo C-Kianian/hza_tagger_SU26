@@ -81,7 +81,7 @@ def main():
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
     except ImportError as e:
-        print(f"Missing dependency: {e}. pip install matplotlib")
+        print(f"Missing dependency: {e}. pip install matplotlib numpy")
         sys.exit(1)
 
     # Load entries that passed validation selections
@@ -142,8 +142,7 @@ def main():
     ax.set_ylabel("Probability Density (Normalized per sample)")
     ax.set_title("Predicted Mass Distribution by Category")
 
-    # Place legend cleanly outside the canvas boundary
-    ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left", frameon=True)
+    ax.legend()
     fig.savefig(outdir / "atlas_paper_mass_dist_overlay.pdf", bbox_inches="tight")
     plt.close(fig)
     print("Saved atlas_paper_mass_dist_overlay.pdf")
@@ -172,8 +171,7 @@ def main():
     ax.set_ylabel("Probability Density (Normalized per sample)")
     ax.set_title("Predicted Mass Distribution by Category")
 
-    # Place legend cleanly outside the canvas boundary
-    ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left", frameon=True)
+    ax.legend()
     fig.savefig(outdir / "all_mass_dist_overlay.pdf", bbox_inches="tight")
     plt.close(fig)
     print("Saved all_mass_dist_overlay.pdf")
@@ -209,7 +207,7 @@ def main():
     ax.set_ylabel("Probability Density (Normalized per sample)")
     ax.set_title("Mass Resolution Residuals by Category")
 
-    ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left", frameon=True)
+    ax.legend()
     fig.savefig(outdir / "atlas_paper_mass_residuals.pdf", bbox_inches="tight")
     plt.close(fig)
     print("Saved atlas_paper_mass_residuals.pdf")
@@ -245,11 +243,10 @@ def main():
     ax.set_ylabel("Probability Density (Normalized per sample)")
     ax.set_title("Mass Resolution Residuals by Category")
 
-    ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left", frameon=True)
+    ax.legend()
     fig.savefig(outdir / "all_mass_residuals.pdf", bbox_inches="tight")
     plt.close(fig)
     print("Saved all_mass_residuals.pdf")
-
 
 if __name__ == "__main__":
     main()

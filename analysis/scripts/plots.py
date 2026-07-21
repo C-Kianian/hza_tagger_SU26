@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Performance plots for the HZa tagger.
+"""Performance plots for a jet classifier.
 
 Produces:
   - ROC curve (a-jet vs other) overall and in pt bins
@@ -31,15 +31,13 @@ def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--scores", required=True, help="H5 file with jets, labels, scores datasets")
     p.add_argument("--outdir", default="analysis/plots")
-    p.add_argument("--wp",     type=float, nargs="+", default=[0.7, 0.85],
-                   help="Signal efficiency working points for WP lines")
-    p.add_argument('--atlas', type=str2bool, default=False, help='include if evaluating ATLAS models')
+    p.add_argument("--wp",     type=float, nargs="+", default=[0.7, 0.85], help="Signal efficiency working points for WP lines")
+    p.add_argument('--atlas', type=str2bool, default=False, help='include if evaluating ATLAS classifier')
     return p.parse_args()
 
 
 def _load(scores_path: str):
     import h5py
-    import numpy as np
     from common.io import JETS_DATASET, LABELS_DATASET
 
     with h5py.File(scores_path, "r") as f:
@@ -64,7 +62,7 @@ def main():
         import matplotlib.pyplot as plt
         from sklearn.metrics import roc_curve, auc
     except ImportError as e:
-        print(f"Missing dependency: {e}.  pip install matplotlib scikit-learn")
+        print(f"Missing dependency: {e}.  pip install matplotlib scikit-learn numpy shap")
         sys.exit(1)
 
     pt, eta, labels, scores = _load(args.scores)
@@ -168,7 +166,6 @@ def main():
     plt.close(fig)
     print("Saved eff_vs_eta.pdf")
 
-
-
 if __name__ == "__main__":
     main()
+
