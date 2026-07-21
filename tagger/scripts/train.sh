@@ -16,7 +16,7 @@
 #   bash tagger/scripts/train.sh --rw 			 # auto reweight a classification task
 #   bash tagger/scripts/train.sh --normdict=path/to/dict # for a specific mass norm dict, default is 2_0
 #   bash tagger/scripts/train.sh --rename=some_name_here # the name to rename the standard hza_tagger_YMD_HMS out directory
-#   bash tagger/scripts/train.sh --edg 			 # include to calculate edge features
+#   bash tagger/scripts/train.sh --config=path/to/cfg 	 # requires path to specfic training config 
 #
 # Environment overrides:
 #   TRAIN_FILE, VAL_FILE, TEST_FILE   explicit H5 paths
@@ -32,10 +32,10 @@ PYTHON="${CONDA_PREFIX:+${CONDA_PREFIX}/bin/python}"
 PYTHON="${PYTHON:-$(command -v python3 2>/dev/null || command -v python)}"
 
 # == get args ================================================================
-ADD_NAME=""
+ADD_NAME=''
 RW=false # to reweight
-EF=false # to calc edge features
-ND='' # specific norm dict
+CONFIG='' # specific train config
+NORM_DICT='' # specific norm dict
 
 POSITIONAL=()
 
@@ -43,8 +43,8 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --rename=*)   RENAME="${1#*=}" ;;
         --rw)         RW=true ;;
-	--edg)        EF=true ;;
-	--normdict=*) ND="${1#*=}" ;;
+	--config=*)   CONFIG="${1#*=}" ;;
+	--normdict=*) NORM_DICT="${1#*=}" ;;
 	*)
             POSITIONAL+=("$1")
             ;;
@@ -74,11 +74,6 @@ else
 fi
 
 # ── Resolve CONFIG ────────────────────────────────────────────────────────────
-CONFIG="${CONFIG:-tagger/configs/hza_train.yaml}"
-if [[ "$EF" == true ]]; then
-    echo "==> Using train yaml with edge feature calculation …"
-    CONFIG="tagger/configs/hza_train_edge_features.yaml"
-fi
 [[ -f "${CONFIG}" ]] || die "Config not found: ${CONFIG}"
 
 export CONFIG="${CONFIG}" #export env variable
@@ -142,17 +137,12 @@ export W_BKG=${W_BKG}
 export W_SIG=${W_SIG}
 
 # == norm dict =================================================================
-ND="${ND:-}"
-if [[ -n "${ND}" ]]; then
-    NORM_DICT=${ND}
-else
-    NORM_DICT="tagger/configs/norm_dict.yaml"
-fi
+[[ -f "${NORM_DICT}" ]] || die "Config not found: ${NORM_DICT}"
 NAME=hza_tagger_$(date +%Y%m%d_%H%M%S)
 EXTRA_DATA_ARGS="--data.norm_dict ${NORM_DICT}"
 
 #export env variable
-export ND=${ND}
+export NORM_DICT=${NORM_DICT}
 
 info "Config:     ${CONFIG}"
 info "Train file: ${TRAIN_FILE}"

@@ -187,11 +187,20 @@ if [[ "${REGRESS}" == true ]]; then
     fi
 else # out jet classifier case
       PLOT_DIR="${PLOT_DIR}_${CFG_NAME}"
+      if [[ "${ATLAS}" == true ]]; then
+    	  "${PYTHON}" analysis/scripts/shap_atlas.py \
+    	  --input   "${SCORES_FILE}" \
+    	  --ckpt    "${CKPT}" \
+    	  --output  "${PLOT_DIR}/atlas_shap_summary.png" \
+    	  --config  "${TRAIN_CFG}" \
+    	  --nsamples 10000
+      fi 
       "${PYTHON}" analysis/scripts/plots.py \
           --scores "${SCORES_FILE}" \
           --outdir "${PLOT_DIR}" \
 	  --atlas  "${ATLAS}"
 fi
+
 
 echo ""
 echo "✓  Done.  Plots written to ${PLOT_DIR}"

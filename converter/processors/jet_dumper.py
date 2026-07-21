@@ -546,7 +546,7 @@ def process_events(events) -> dict[str, np.ndarray]:
     tau_2_results = compute_batch_nsubjettiness(filtered_tracks, subjet_axes_arr, jet_radius)
 
     # replace events where clustering was impossible
-    tau_2_results = np.where(invalid_subjet_mask, -999999.0, tau_2_results)
+    tau_2_results = np.where(invalid_subjet_mask, -1.0, tau_2_results)
 
     # add to output array
     jets_arr["tau2"] = tau_2_results
