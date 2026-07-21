@@ -1,7 +1,3 @@
-# Warmup directory
-1. The "original" notebook provides the starter code for loading data and making plots
-2. The "my version" notebook provides a (roughly) completed notebook for guidance
-
 # Jet tagging of low mass resonances
 
 This project provides tools to train and evaluate a jet tagger for a H→Z(ll)+a(had) search at the CMS experiment.
@@ -16,10 +12,12 @@ The project has several sub-parts which are explained below:
 
 ```
 hza_tagger/
-├── common/          shared label defs, truth matching, IO schema, variable lists
-├── converter/       btvNanoAOD ROOT → H5 (coffea, columnar)
-├── tagger/          SALT submodule + training configs and scripts
-└── analysis/        plotting scripts for ROC curves, score distributions
+├── common/             shared label defs, truth matching, IO schema, variable lists
+├── converter/          btvNanoAOD ROOT → H5 (coffea, columnar)
+├── tagger/             SALT submodule + training configs and scripts
+├── atlas_2025_model/   Replica of ATLAS 2025 model in Salt (see literature)
+├── analysis/           plotting scripts for ROC curves, score distributions
+└── warmup_material/    "original" provides starter code, "my version" is a (roughly) complete guide
 ```
 
 1. As the first step, you will have to prepare the datasets in the [h5](https://en.wikipedia.org/wiki/Hierarchical_Data_Format) format which can be used to train the machine learning algorithm. This is handled by the tools in `converter`.
@@ -52,6 +50,33 @@ pip install -e .        # installs common/, converter/, analysis/ as a package, 
 bash tagger/scripts/setup_salt.sh
 ```
 
+<details>
+<summary>Helpful, but not required, tip!</summary>
+
+After running steps 1 and 2 once they can be simplified into a single command to save time. It is best to ask someone or AI for your specific setup. Here is my `~/.bashrc` example:
+
+```bash
+# Shortcut to jump straight into the tagger project
+go_tagger() {
+    # 1. Navigate to your project repository (Replace with your actual absolute path!)
+    cd /path/to/hza_tagger_SU26/ || return
+
+    # 2. Activate the environment
+    conda activate hza_tagger
+
+    # 3. Run the salt setup script
+    bash tagger/scripts/setup_salt.sh
+
+    echo "🚀 hza_tagger env and Salt setup are ready!"
+}
+```
+Then everytime I log in I simply run:
+```bash
+go_tagger
+```
+And after ~1 min everything is set up
+</details>
+
 ### 3. Prepare the converter config
 
 Check your input ROOT file's branch names
@@ -80,13 +105,49 @@ Pass `--out data/all.h5` to skip the split and write a single file (useful for q
 Pass `--max-events N` to cap the number of events read.
 
 ### 5. Scale out on DESY NAF / HTCondor
-
+For larger files it is needed to split and run them in parallel to save time: 
 ```bash
 python converter/run_condor.py \
     --config converter/configs/hza_signal.yaml \
     --outdir data/chunks/ \
     --merge
 ```
+
+<details>
+<summary>Cyrus' Work</summary>
+
+Most of my work can be found in:
+
+`/data/dust/user/kianianc/`
+
+```text
+/data/dust/user/kianianc/
+├── H_Za_data/          Contains h5 file data
+│   ├── 1st_run         The original h5 processing run
+│   ├── 2nd_run         Adds eta, phi track info for edge features
+│   ├── 3rd_run         Adds ATLAS features, filter, and truth-failing daughter info
+│   └── test_sig        Test signal files guaranteed to work
+├── model_logs/         Includes logs and checkpoints for trained models
+├── plots/              Plots for the models and data
+└── split_300k_bkg/     Background file split into smaller ROOT files
+```
+
+The different versions of models are detailed [here](https://docs.google.com/presentation/d/1hy5rmuNpHurtNS1Z8F4DmpsISaKPKuabucHzqMwENwk/edit?usp=sharing)
+
+</details>
+
+### 5.1. Validate h5 Files
+To ensure the h5 processing was successful run:
+```bash
+python analysis/scripts/data_validation_scripts/sig_vs_bkg_plots.py 
+--file=/path/to/your/h5 \
+--outdir=/path/to/data/plots \
+--plot 
+```
+
+Additionally, one can include `--atlas` to plot ATLAS paper variables; `--edg` for `Salt` edge features; or set a max number of events to plot with `--maxEvents=N`
+
+Also included is `analysis/scripts/data_validation_scripts/sig_vs_sig_plots.py`, which plots different h5 files against each other.
 
 ### 6. Preprocess + train
 
@@ -119,11 +180,20 @@ On DESY NAF GPU nodes, add `--trainer.accelerator gpu --trainer.devices 1` to `t
 
 `train.sh` sources `.env` on every run and passes the key to `CometLogger`. Without a key it falls back to offline mode (logs saved under `logs/`).
 
-### 6.1 Preprocess + train (ATLAS version)
+### 6.1. Preprocess + train (ATLAS version)
 ```bash
-python atlas_2025_model/scripts/event_mask.py --infile /path/to/data --outdir /path/to/dir --mask sample_name     # applies ATLAS selection criteria
-bash tagger/scripts/preprocess.sh /path/to/your/train/file              					   # computes normalisation dict
-bash tagger/scripts/train.sh      /path/to/your/train/file /path/to/your/val/file /path/to/your/test/file          # launches SALT training
+python atlas_2025_model/scripts/event_mask.py 
+  --infile /path/to/data \
+  --outdir /path/to/dir \ 
+  --mask sample_name \    # applies ATLAS selection criteria (ie. atlas_valid)
+  # This can also be used to filter files into only signal/background events
+  
+bash tagger/scripts/preprocess.sh /path/to/your/train/file # computes normalisation dict
+
+bash tagger/scripts/train.sh 
+  /path/to/your/train/file \
+  /path/to/your/val/file \
+  /path/to/your/test/file  # launches SALT training
 ```
 
 ### 7. Evaluate
@@ -131,15 +201,17 @@ bash tagger/scripts/train.sh      /path/to/your/train/file /path/to/your/val/fil
 The evaluation script auto-discovers the test H5 file, the most recent checkpoint, and the training config from the standard project layout:
 
 ```bash
-bash analysis/scripts/evaluate.sh
+bash analysis/scripts/evaluate.sh --config=/path/to/train_cfg --plot 
 ```
 
-It runs two steps in sequence and writes plots to `analysis/plots/`:
+Note: This script works for ATLAS models too
+
+It runs two steps in sequence and writes plots to `analysis/plots_in_file_name/`
 
 1. **Score** — `eval_to_h5.py` loads the best checkpoint and appends a `scores` dataset (shape `(N, 2)`) to a copy of the test H5.
 2. **Plot** — `plots.py` produces ROC curves, score distributions, and efficiency vs pT/η.
 
-**Override any path** via argument or environment variable:
+**Override any path** (best practice) via argument or environment variable:
 
 ```bash
 # Explicit test file
@@ -154,9 +226,18 @@ CKPT=logs/my_run/checkpoints/best.ckpt \
 PLOT_DIR=analysis/plots/my_run \
 bash analysis/scripts/evaluate.sh
 ```
+One can also specifiy `--modeldir=/path/to/logs`, the path to the directory that is the parent of `ckpts`, to make use of the best model finding feature rather than having to explicity pass it themselves
+
+
+### 7.1. Additional Analysis
+Additional analysis scripts, under `analysis/scripts`, that are not already run by default in `evaluate.sh` include:
+1. `mass_specific_classifier_plots.py` which plots the different masses and ATLAS paper masses for a classifier trained on all mass points
+2. `overlay_plots.py` which currently adds different ROC curves to the same plot 
+
 
 ## Tests
 
 ```bash
 pytest -v
 ```
+
