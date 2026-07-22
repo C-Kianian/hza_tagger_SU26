@@ -1,4 +1,6 @@
-"""H5 schema helpers shared by converter and analysis."""
+"""H5 schema helpers shared by converter and analysis.
+   Keep in synch with jet dumper variables, otherwise the variables in the dumper will not be saved to the h5!
+"""
 
 from __future__ import annotations
 
@@ -83,6 +85,9 @@ TRACK_DTYPE = np.dtype([
 ])
 
 LABEL_DTYPE = np.dtype([
-    ("a_jet", np.int32),
+    ("a_jet",                        np.int32),
+    ("signal_only_weight",           np.float32),
+    ("regression_mass_weight",       np.float32),
+    ("binary_classification_weight", np.float32),
 ])
 

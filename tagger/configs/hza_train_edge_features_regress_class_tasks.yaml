@@ -1,0 +1,183 @@
+# SALT 0.11 training config for the HZa binary tagger
+# Run with: salt fit --config tagger/configs/hza_train.yaml
+#
+# Requires SALT to be checked out at tagger/salt/ (see README).
+# Adjust data.train_file / val_file / test_file to your H5 paths.
+
+name: hza_tagger_regressor_multi_task
+
+
+model:
+  lrs_config:
+    initial: 1e-7
+    max: 5e-4
+    end: 1e-5
+    pct_start: 0.01
+    weight_decay: 1e-5
+
+  model:
+    class_path: salt.models.SaltModel
+    init_args:
+      init_nets:
+        - input_name: tracks
+          dense_config:
+            output_size: &embed_dim 128
+            hidden_layers: [128]
+            activation: &activation ReLU
+
+        - input_name: EDGE
+          dense_config:
+            input_size: 8
+            output_size: &edge_embed_dim 32
+            hidden_layers: [32]
+            activation: *activation
+
+      encoder:
+        class_path: salt.models.TransformerEncoder
+        init_args:
+          embed_dim: *embed_dim
+          num_layers: 3
+          edge_embed_dim: 32
+          out_dim: &out_dim 64
+          mha_config:
+            num_heads: 4
+            attention: { class_path: salt.models.ScaledDotProductAttention }
+          dense_config:
+            activation: *activation
+
+      pool_net:
+        class_path: salt.models.GlobalAttentionPooling
+        init_args: { input_size: *out_dim }
+
+      tasks:
+        class_path: torch.nn.ModuleList
+        init_args:
+          modules:
+            - class_path: salt.models.ClassificationTask
+              init_args:
+                name: jets_classification
+                input_name: jets
+                label: a_jet
+                class_names: [background, a_jet]
+                use_class_dict: false
+                loss:
+                  class_path: torch.nn.CrossEntropyLoss
+                  init_args:
+                    reduction: none
+                sample_weight: binary_classification_weight # weights loaded here
+                dense_config:
+                  input_size: *out_dim
+                  output_size: 2
+                  hidden_layers: [64, 32]
+                  activation: *activation
+
+            - class_path: salt.models.RegressionTask
+              init_args:
+                name: jet_a_mass_regression
+                input_name: jets
+                targets: truth_a_mass
+                loss:
+                  class_path: HuberLoss
+                  init_args: # set to default
+                    reduction: none # other options: none, sum
+                    delta: 1.0      # can be any value, determines where the loss behavior 'switches'
+                sample_weight: regression_mass_weight # weights loaded here
+                dense_config:
+                  input_size: *out_dim
+                  output_size: 1
+                  hidden_layers: [64, 32]
+                  activation: *activation
+
+
+data:
+  train_file: path/to/train/file
+  val_file:   path/to/val/file
+  test_file:  path/to/test/file
+
+  norm_dict:  tagger/configs/norm_dict.yaml
+  class_dict: null  # disable — inherited EOS path from salt/configs/base.yaml is not accessible
+
+  # No class_dict needed for simple binary classification
+  # (use_class_dict: false in the task above)
+
+  # Labels to read from each input dataset
+  # a_jet is stored as a field inside the jets H5 dataset
+  labels:
+    jets:
+      - a_jet
+
+  input_map:
+    jets: jets
+    tracks: tracks
+    EDGE: tracks
+
+    # the variables used in training set here
+  variables:
+    jets:
+      - pt
+      - eta
+      - phi
+      - mass
+      #- trk_multi
+    tracks:
+      - pt
+      - eta_rel
+      - phi_rel
+      - mass
+      - charge
+      - pdgId
+      - dxy
+      - dz
+      - dxySig
+      - dzSig
+      - trkQuality
+      - puppiWeight
+    EDGE:
+      - dR
+      - z
+      - kt
+      #- subjetIndex
+      - isSelfLoop
+      #- mass
+
+  batch_size:  1024
+  num_workers: 0
+  num_train: -1
+  num_val:   -1
+  num_test:  -1
+
+trainer:
+  max_epochs: 100
+  accelerator: auto   # set to "gpu" on NAF
+  devices: 1
+  log_every_n_steps: 50
+  default_root_dir: logs
+
+  # CometLogger — API key is read from the COMET_API_KEY environment variable
+  # (set it in .env, which train.sh sources automatically).
+  # Falls back to offline mode when no key is present.
+  # Run name is injected by train.sh via --trainer.logger.init_args.experiment_name.
+  logger:
+    class_path: lightning.pytorch.loggers.CometLogger
+    init_args:
+      project_name: hza_tagger
+      save_dir: logs
+      offline: false
+      display_summary_level: 0
+
+  callbacks:
+    - class_path: salt.callbacks.Checkpoint
+      init_args:
+        monitor_loss: val/jets_classification_loss
+    - class_path: lightning.pytorch.callbacks.EarlyStopping
+      init_args:
+        monitor: val/jets_classification_loss
+        mode: min
+        patience: 10
+        min_delta: 0.0001
+        verbose: true
+    - class_path: lightning.pytorch.callbacks.LearningRateMonitor
+    - class_path: lightning.pytorch.callbacks.TQDMProgressBar
+      init_args: { refresh_rate: 50 }
+    - class_path: lightning.pytorch.callbacks.ModelSummary
+      init_args: { max_depth: 2 }

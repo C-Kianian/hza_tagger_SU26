@@ -212,7 +212,7 @@ def compute_batch_nsubjettiness(trks_arr, subjet_axes_arr, jet_radius):
     denominator = np.sum(t_pt * jet_radius, axis=1)
 
     # final ratios
-    return np.where(denominator > 0, numerator / denominator, -999999.0)
+    return np.where(denominator > 0, numerator / denominator, -1.0)
 
 # ── main processor function ────────────────────────────────────────────────────
 
@@ -368,7 +368,7 @@ def process_events(events) -> dict[str, np.ndarray]:
     jets_arr["eta"]                 = flat_jet_eta
     jets_arr["phi"]                 = flat_jet_phi
     jets_arr["mass"]                = _flat(jets_sel.mass)
-    jets_arr["regression_a_mass"]   = np.zeros(n_sel_total, dtype=np.float32)
+    jets_arr["regression_a_mass"]   = np.zeros(n_sel_total, dtype=np.float32) # regression mass, to be filled later
     jets_arr["a_jet"]               = labels_sel
     jets_arr["truth_pt"]            = truth_pt_sel
     jets_arr["truth_mass"]          = truth_mass_sel
@@ -377,8 +377,11 @@ def process_events(events) -> dict[str, np.ndarray]:
     jets_arr["n_dau_failed"]        = n_dau_failed_sel
     jets_arr["n_dau"]               = n_dau_sel
 
-    labels_arr          = np.zeros(n_sel_total, dtype=LABEL_DTYPE)
-    labels_arr["a_jet"] = labels_sel
+    labels_arr                                     = np.zeros(n_sel_total, dtype=LABEL_DTYPE)
+    labels_arr["a_jet"]                            = labels_sel
+    labels_arr["signal_only_weight"]               = np.zeros(n_sel_total, dtype=np.float32) # weights for training, to be filled later
+    labels_arr["regression_mass_weight"]           = np.zeros(n_sel_total, dtype=np.float32)
+    labels_arr["binary_classification_weight"]     = np.zeros(n_sel_total, dtype=np.float32)
 
     # Vectorized scatter into (n_jets, N_TRACKS) track array
     tracks_arr = np.zeros((n_sel_total, N_TRACKS), dtype=TRACK_DTYPE)

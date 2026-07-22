@@ -32,10 +32,12 @@ PYTHON="${CONDA_PREFIX:+${CONDA_PREFIX}/bin/python}"
 PYTHON="${PYTHON:-$(command -v python3 2>/dev/null || command -v python)}"
 
 # == get args ================================================================
-ADD_NAME=''
+RENAME='' # name of dir to move logs to
 RW=false # to reweight
 CONFIG='' # specific train config
 NORM_DICT='' # specific norm dict
+W_BKG=1.0 # default classification weights
+W_SIG=1.0
 
 POSITIONAL=()
 
@@ -78,6 +80,7 @@ fi
 
 export CONFIG="${CONFIG}" #export env variable
 
+REGRESS=$(python common/parse_yaml.py --contains regress --config "${CONFIG}")
 # ── Auto-discover H5 files ────────────────────────────────────────────────────
 _pick_h5() {
     local val="${1}"; shift
@@ -122,15 +125,18 @@ else
 fi
 
 # == reweighting =================================================================
-if [[ "$RW" == true ]]; then    
-    echo "==> Computing reweighting from ${TRAIN_FILE} …"
-    read -r W_BKG W_SIG < <("${PYTHON}" tagger/scripts/calc_reweight_vals.py --file "${TRAIN_FILE}")
-else
-    W_BKG=1.0
-    W_SIG=1.0
+if [[ "$RW" == true ]]; then
+    if [[ "$REGRESS" == true ]]; then # case of multi tasking
+        python tagger/scripts/calc_reweight_vals.py --file "${TRAIN_FILE}" --towrite
+        python tagger/scripts/calc_reweight_vals.py --file "${VAL_FILE}" --towrite
+        python tagger/scripts/calc_reweight_vals.py --file "${TEST_FILE}" --towrite
+    else
+        echo "==> Computing reweighting from ${TRAIN_FILE} …"
+        read -r W_BKG W_SIG < <("${PYTHON}" tagger/scripts/calc_reweight_vals.py --file "${TRAIN_FILE}")
+        echo "Background rw: ${W_BKG}, signal rw: ${W_SIG}"
+        EXTRA_LOSS_ARGS="--model.model.init_args.tasks.init_args.modules.init_args.loss.init_args.weight=[${W_BKG},${W_SIG}]"
+    fi
 fi
-echo "Background rw: ${W_BKG}, signal rw: ${W_SIG}"
-EXTRA_LOSS_ARGS="--model.model.init_args.tasks.init_args.modules.init_args.loss.init_args.weight=[${W_BKG},${W_SIG}]"
 
 #export env variable
 export W_BKG=${W_BKG}
@@ -167,26 +173,20 @@ salt fit \
     "$@"
 
 # == Option to rename the output dir ===========================================
-# 1. Capture the exit code of the training process
 TRAIN_STATUS=$?
-
-# 2. Find the most recently modified directory matching the lightning pattern
 LATEST_DIR=$(ls -td logs/hza_tagger_* 2>/dev/null | head -n 1)
 
-# 3. Rename it to your specified $NAME variable
-if [[ -d "$LATEST_DIR" && "$LATEST_DIR" != "logs/${RENAME}" ]]; then
-    echo "==> Clean up: Moving output directory to logs/${RENAME}"
-
-    # Safety check: if target directory exists, append a small safety flag
-    if [[ -d "logs/${RENAME}" ]]; then
-        SAFE_NAME="logs/${RENAME}_fallback_$(date +%H%M%S)"
-        echo "    [Warning] logs/${RENAME} already exists! Saving to ${SAFE_NAME} instead."
-        mv "$LATEST_DIR" "$SAFE_NAME"
-    else
-        mv "$LATEST_DIR" "logs/${RENAME}"
+if [[ -n "${RENAME}" && -d "${LATEST_DIR:-}" ]]; then
+    if [[ "${LATEST_DIR}" != "logs/${RENAME}" ]]; then
+        echo "==> Clean up: Moving output directory to logs/${RENAME}"
+        if [[ -d "logs/${RENAME}" ]]; then
+            SAFE_NAME="logs/${RENAME}_fallback_$(date +%H%M%S)"
+            echo "    [Warning] logs/${RENAME} already exists! Saving to ${SAFE_NAME} instead."
+            mv "$LATEST_DIR" "$SAFE_NAME"
+        else
+            mv "$LATEST_DIR" "logs/${RENAME}"
+        fi
     fi
-else
-    echo "==> Clean up: No matching timestamped directory found to rename."
 fi
 
 # 4. Exit with the original training status so batch scripts know if it failed
