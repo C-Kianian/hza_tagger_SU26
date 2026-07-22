@@ -1,3 +1,8 @@
+# SALT 0.11 training config for the ATLAS tagger
+#
+# Requires SALT to be checked out at tagger/salt/ (see README).
+# Adjust data.train_file / val_file / test_file to your H5 paths. (not needed if ran with train.sh)
+
 name: atlas_jet_classification
 
 model:

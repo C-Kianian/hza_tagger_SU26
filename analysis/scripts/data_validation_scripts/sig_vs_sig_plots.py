@@ -1,3 +1,19 @@
+"""
+Plots signal vs signal for the different mass points from an h5 file on different jet/track/edge variables
+
+Produces:
+  - A directory (analysis/default_plot_outdir by default) with subdirectories containing plots on the readily available
+  jet/track/edge variables and some derived feature.
+  - Additionally, --atlas can be specified to plot the features used in the ATLAS 2025 paper
+  - Similarly, --edg can be specified to plot the edge features that salt calculates on the fly
+
+Usage
+-----
+    python analysis/data_validation_scripts/sig_vs_bkg.py \\
+        --file   data/merged.h5 \\
+        --outdir analysis/plots/ \\
+"""
+
 import h5py
 import numpy as np
 import matplotlib.pyplot as plt
@@ -11,10 +27,13 @@ hep.style.use("CMS")
 parser = ArgumentParser()
 parser.add_argument('--files', type=str, required=True, nargs='+', help='space separated list of file(s) to analyze')
 parser.add_argument('--maxEvents', type=int, default=None, help='max amount of events, per file, to analyze')
+parser.add_argument("--outdir", default="analysis/default_sig_vs_sig_outdir")
 args = parser.parse_args()
 
 FILES = [f for f in args.files]
 MAX_EVENTS = args.maxEvents
+OUTDIR = Path(args.outdir) # make output dir
+OUTDIR.mkdir(parents=True, exist_ok=True)
 
 file_names = [Path(f).stem for f in FILES]
 
@@ -83,9 +102,9 @@ def plot_sig_vs_sig(var_dict, var, xtitle, name):
     ax.set_ylabel("Normalized Entries")
     ax.legend()
     hep.cms.label("Preliminary", data=False, ax=ax, com=13.6)
-
-    fig.savefig(f"compare_{name}_{var}.pdf", bbox_inches="tight")
-    print(f"Finished plot: {name} {var}")
+    # save pdfs to outdir
+    fig.savefig(f"{OUTDIR}/compare_{name}_{var}.pdf", bbox_inches="tight")
+    print(f"Finished plot: {OUTDIR}/{name} {var}")
     plt.close(fig)
 
 def main():

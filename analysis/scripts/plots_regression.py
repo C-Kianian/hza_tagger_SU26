@@ -24,7 +24,7 @@ def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--scores", required=True, help="H5 file with evaluated datasets")
     p.add_argument("--outdir", default="analysis/plots")
-    p.add_argument('--eval', type=str, default="atlas_regression_a_mass", help='what regression name to evaluate')
+    p.add_argument('--eval', type=str, default="atlas_regression_a_mass", help='what regression name to store results in')
     return p.parse_args()
 
 

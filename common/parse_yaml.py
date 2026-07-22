@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-
+"""
+File: parse_yaml.py
+This script was made to parse a yaml config, in particular a training config file, used in evaluate.sh
+"""
 import argparse
 from operator import contains
 from pathlib import Path

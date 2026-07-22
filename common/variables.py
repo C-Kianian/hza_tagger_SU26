@@ -1,5 +1,7 @@
 """Single source of truth for branch names and feature variable lists.
 
+This is the info to be pulled from the root file
+
 Converter and tagger configs both import from here so renaming a branch
 only requires a change in one place.
 """

@@ -1,3 +1,19 @@
+"""
+Plots signal vs background from an h5 file for different jet/track/edge variables
+
+Produces:
+  - A directory (analysis/default_plot_outdir by default) with subdirectories containing plots on the readily available
+  jet/track/edge variables and some derived feature.
+  - Additionally, --atlas can be specified to plot the features used in the ATLAS 2025 paper
+  - Similarly, --edg can be specified to plot the edge features that salt calculates on the fly
+
+Usage
+-----
+    python analysis/data_validation_scripts/sig_vs_bkg.py \\
+        --file   data/merged.h5 \\
+        --outdir analysis/plots/ \\
+        --plot
+"""
 import sys
 
 import h5py
@@ -9,7 +25,8 @@ import hist
 from argparse import ArgumentParser
 from pathlib import Path
 try:
-    from salt.data.edge_features import get_inputs_edge # dont know how this import works, it doesnt appear in salt repo
+    from salt.data.edge_features import get_inputs_edge
+    # path may need to be updated in the future to be: from salt.utils.edge_features import calculate_edge_features
 except ImportError:
     print("Error: Could not import 'get_inputs_edge' from salt.data.edge_features.")
     print("Ensure SALT is correctly installed and accessible in your python path.")

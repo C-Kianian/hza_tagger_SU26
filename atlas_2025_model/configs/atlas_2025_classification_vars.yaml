@@ -1,5 +1,5 @@
 # Variable lists for the ATLAS HZa binary tagger
-# Keep in sync with common/variables.py
+# Ensure the variables used here are stored in the h5 by jet_dumper.py and io.py!
 
 jets:
   - name: atlas_regression_a_mass 
