@@ -1,4 +1,4 @@
-  common/variables.py# Variable lists for the HZa binary tagger — these are the variables to normalize
+# Variable lists for the HZa binary tagger — these are the variables to normalize
 # Ensure the variables used here are stored in the h5 by jet_dumper.py and io.py!
 
 

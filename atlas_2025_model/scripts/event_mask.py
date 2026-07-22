@@ -1,3 +1,11 @@
+"""
+Script for filtering events based on a mask, this can be the ATLAS valid mask, which indicates which events pass the
+additional ATLAS 2025 criteria. This can be the labels of signal/background, filtering to only include one of them
+
+Originally used for training the ATLAS models and subsequent comparisons with the v1-3 Salt models, here the original
+h5 files were filtered to include only ATLAS jets, then only for the regressor were pure signal labeled h5 files used,
+ie. filtered the already ATLAS filtered jets by requiring them to be labeled as signal
+"""
 #!/usr/bin/env python3
 import argparse
 import shutil
