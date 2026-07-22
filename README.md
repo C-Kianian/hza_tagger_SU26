@@ -113,6 +113,16 @@ python converter/run_condor.py \
     --merge
 ```
 
+Importantly, the condor script only produces one merged file, it is necessary to split this into train/test/val, this can be done via:
+
+```bash
+python converter/make_train_test_val.py \ # check the script to see all args
+        --inputs file1.h5 file2.h5 etc.h5 \
+        -outdir=/path/to/out/dir \
+        --name=name_to_add_to_files
+```
+Note this script takes in multiple files, so one can merge a background file with a signal file and then split. Importantly, if the input files are reordered the split will not be consistent.  
+
 <details>
 <summary>Cyrus' Work</summary>
 
