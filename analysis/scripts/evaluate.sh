@@ -39,20 +39,23 @@ while [[ $# -gt 0 ]]; do
             DIR="$2"
             shift 2
             ;;
-	 --modeldir=*)
-	    DIR="${1#*=}"
-	    shift 1
-	    ;;
-    	 --config)
+	      --modeldir=*)
+	          DIR="${1#*=}"
+	          shift 1
+	          ;;
+        --config)
             TRAIN_CFG="$2"
-	    shift 2
-	    ;;
-	 --config=*)
-	   TRAIN_CFG="${1#*=}"
-	   shift 1
-	   ;;
-    	 --plot)       PLOTS=true; shift ;;
-	 *)
+	          shift 2
+	          ;;
+	      --config=*)
+	          TRAIN_CFG="${1#*=}"
+	          shift 1
+	          ;;
+        --plot)
+            PLOTS=true;
+            shift 1
+            ;;
+	      *)
             POSITIONAL+=("$1")
             shift
             ;;
@@ -177,13 +180,13 @@ if [[ "${REGRESS}" == true ]]; then
         "${PYTHON}" analysis/scripts/plots_regression.py \
         --scores "${SCORES_FILE}" \
         --outdir "${PLOT_DIR}" \
-    	--eval   "atlas_regression_a_mass"
+    	  --eval   "atlas_regression_a_mass"
     else # our regression model case
 	PLOT_DIR="${PLOT_DIR}_atlas_classifier"
         "${PYTHON}" analysis/scripts/plots_regression.py \
         --scores "${SCORES_FILE}" \
         --outdir "${PLOT_DIR}" \
-    	--eval  "regression_a_mass"
+    	  --eval  "regression_a_mass"
     fi
 else # out jet classifier case
       PLOT_DIR="${PLOT_DIR}_${CFG_NAME}"
@@ -198,7 +201,7 @@ else # out jet classifier case
       "${PYTHON}" analysis/scripts/plots.py \
           --scores "${SCORES_FILE}" \
           --outdir "${PLOT_DIR}" \
-	  --atlas  "${ATLAS}"
+	        --atlas  "${ATLAS}"
 fi
 
 

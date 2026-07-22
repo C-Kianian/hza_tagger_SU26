@@ -16,7 +16,7 @@ while [[ $# -gt 0 ]]; do
     	    MASS="${1#*=}"
     	    shift
             ;;
-	--mass)
+	      --mass)
             MASS="$2"
             shift 2
             ;;
@@ -29,7 +29,7 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
     
-    	*)
+    	  *)
             POSITIONAL+=("$1")
             shift
             ;;

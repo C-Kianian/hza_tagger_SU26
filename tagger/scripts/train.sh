@@ -43,9 +43,9 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --rename=*)   RENAME="${1#*=}" ;;
         --rw)         RW=true ;;
-	--config=*)   CONFIG="${1#*=}" ;;
-	--normdict=*) NORM_DICT="${1#*=}" ;;
-	*)
+	      --config=*)   CONFIG="${1#*=}" ;;
+	      --normdict=*) NORM_DICT="${1#*=}" ;;
+	      *)
             POSITIONAL+=("$1")
             ;;
     esac
