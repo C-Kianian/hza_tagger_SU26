@@ -32,6 +32,7 @@ PYTHON="${CONDA_PREFIX:+${CONDA_PREFIX}/bin/python}"
 PYTHON="${PYTHON:-$(command -v python3 2>/dev/null || command -v python)}"
 
 # == get args ================================================================
+EXTRA_LOSS_ARGS=''
 RENAME='' # name of dir to move logs to
 RW=false # to reweight
 CONFIG='' # specific train config
@@ -191,3 +192,4 @@ fi
 
 # 4. Exit with the original training status so batch scripts know if it failed
 exit $TRAIN_STATUS
+

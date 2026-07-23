@@ -77,7 +77,7 @@ model:
                 input_name: jets
                 targets: truth_a_mass
                 loss:
-                  class_path: HuberLoss
+                  class_path: torch.nn.HuberLoss
                   init_args: # set to default
                     reduction: none # other options: none, sum
                     delta: 1.0      # can be any value, determines where the loss behavior 'switches'
@@ -181,3 +181,4 @@ trainer:
       init_args: { refresh_rate: 50 }
     - class_path: lightning.pytorch.callbacks.ModelSummary
       init_args: { max_depth: 2 }
+
