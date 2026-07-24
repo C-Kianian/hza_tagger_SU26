@@ -56,6 +56,11 @@ JET_DTYPE = np.dtype([
     #("trk_multi",                          np.int32),   # number of tracks in jet
     #("mean_trk_jet_dR",                    np.float32), # mean dR of trk to jet
     #("max_trk_jet_dR",                     np.float32), # max dR of trk to jet
+
+    # task weights
+    ("signal_only_weight",           np.float32),
+    ("regression_mass_weight",       np.float32),
+    ("binary_classification_weight", np.float32),
 ])
 
 # dtype of the tracks structured array stored in H5
@@ -85,9 +90,6 @@ TRACK_DTYPE = np.dtype([
 ])
 
 LABEL_DTYPE = np.dtype([
-    ("a_jet",                        np.int32),
-    ("signal_only_weight",           np.float32),
-    ("regression_mass_weight",       np.float32),
-    ("binary_classification_weight", np.float32),
+    ("a_jet", np.int32),
 ])
 

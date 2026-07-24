@@ -23,9 +23,9 @@ def write_h5_weights(file):
         weight arrays in the h5"""
     with h5py.File(file, "a") as f:
         # load
-        labels_dataset = f["labels"]
+        jets_dataset = f["jets"]
         labels = f["labels"]["a_jet"][:]             # 1 for signal, 0 for bkg
-        truth_mass = f["jets"]["truth_a_mass"][:]    # truth masses
+        truth_mass = jets_dataset["truth_a_mass"][:] # truth masses
 
         # setup
         sig_mask = (labels == 1)
@@ -36,7 +36,7 @@ def write_h5_weights(file):
         # weight 1: set 1 for sig 0 for bkg, useful for regression tasks where we just want to learn the signal as is
         signal_only_weight = np.zeros_like(labels, dtype=np.float32)
         signal_only_weight[sig_mask] = 1.0
-        labels_dataset["signal_only_weight"][:] = signal_only_weight.astype(np.float32) # write
+        jets_dataset["signal_only_weight"] = signal_only_weight.astype(np.float32) # write
 
         # ============
         # weight 2: set 0 for bkg weight by masses, useful for regression tasks where we want each mass point learned equally
@@ -48,7 +48,7 @@ def write_h5_weights(file):
             # all masses get weighted except 0, which are the background labeled events, get set to 0
             regression_mass_weight[m_mask] = len(truth_mass[sig_mask]) / (len(unique_masses) * count)
 
-        labels_dataset["regression_mass_weight"][:] = regression_mass_weight.astype(np.float32) # write
+        jets_dataset["regression_mass_weight"] = regression_mass_weight.astype(np.float32) # write
 
         # ============
         # weight 3: weight both sig and bkg to be learned equally, useful for classification tasks
@@ -56,7 +56,7 @@ def write_h5_weights(file):
         binary_classification_weight[sig_mask] = n_events / (2 * n_sig)
         binary_classification_weight[~sig_mask] = n_events / (2 * (n_events - n_sig))
 
-        labels_dataset["binary_classification_weight"][:] = binary_classification_weight.astype(np.float32)  # write
+        jets_dataset["binary_classification_weight"] = binary_classification_weight.astype(np.float32)  # write
         # ============
 
         print(f"Successfully wrote weights to {FILE}")

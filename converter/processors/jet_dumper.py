@@ -376,12 +376,13 @@ def process_events(events) -> dict[str, np.ndarray]:
     jets_arr["failed_dau_dr"]       = failed_dau_dr_sel # track info about the daughter particles, to test matching criteria
     jets_arr["n_dau_failed"]        = n_dau_failed_sel
     jets_arr["n_dau"]               = n_dau_sel
+    # weights for tasks
+    jets_arr["signal_only_weight"]               = np.zeros(n_sel_total, dtype=np.float32) # weights for training, to be filled later
+    jets_arr["regression_mass_weight"]           = np.zeros(n_sel_total, dtype=np.float32)
+    jets_arr["binary_classification_weight"]     = np.zeros(n_sel_total, dtype=np.float32)
 
     labels_arr                                     = np.zeros(n_sel_total, dtype=LABEL_DTYPE)
     labels_arr["a_jet"]                            = labels_sel
-    labels_arr["signal_only_weight"]               = np.zeros(n_sel_total, dtype=np.float32) # weights for training, to be filled later
-    labels_arr["regression_mass_weight"]           = np.zeros(n_sel_total, dtype=np.float32)
-    labels_arr["binary_classification_weight"]     = np.zeros(n_sel_total, dtype=np.float32)
 
     # Vectorized scatter into (n_jets, N_TRACKS) track array
     tracks_arr = np.zeros((n_sel_total, N_TRACKS), dtype=TRACK_DTYPE)
