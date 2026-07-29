@@ -25,8 +25,7 @@ import hist
 from argparse import ArgumentParser
 from pathlib import Path
 try:
-    from salt.data.edge_features import get_inputs_edge
-    # path may need to be updated in the future to be: from salt.utils.edge_features import calculate_edge_features
+    from salt.utils.edge_features import calculate_edge_features
 except ImportError:
     print("Error: Could not import 'get_inputs_edge' from salt.data.edge_features.")
     print("Ensure SALT is correctly installed and accessible in your python path.")
@@ -382,7 +381,7 @@ def main():
             ############ (OPTIONAL) EDGE FEATURE INFO ###########
             if EDGE:
                 try:
-                    edges = get_inputs_edge(tracks, edge_labels.keys()) # try to calc edge features (N events, N trks, N trks, num_edg_feats)
+                    edges = calculate_edge_features(tracks, edge_labels.keys()) # try to calc edge features (N events, N trks, N trks, num_edg_feats)
                     feature_names = list(edge_labels.keys())
                 except ValueError as e:
                     print(f"Issue when trying to calculate edge features: {e}")

@@ -92,7 +92,7 @@ def convert_one_file(file_path: str, out_path: str, cfg: dict):
                 schemaclass=schema,
                 uproot_options={"filter_name": REQUIRED_BRANCHES},
             ).events()
-            chunk  = ak.Array(chunk.compute())
+
             arrays = process_events(chunk)
             if len(arrays["jets"]) > 0:
                 writer.write_chunk(arrays["jets"], arrays["tracks"], arrays["labels"])
@@ -113,7 +113,6 @@ def convert_one_file(file_path: str, out_path: str, cfg: dict):
 def merge_files(outdir: Path, merged_path: Path):
     """Concatenate per-file H5 chunks into a single file."""
     import h5py
-    import numpy as np
     import time
     from common.io import JETS_DATASET, TRACKS_DATASET, LABELS_DATASET
 	
@@ -205,8 +204,8 @@ def main():
         memory="16GB",
         disk="16GB",
         log_directory=str(outdir / "logs"),
-        python="/afs/desy.de/user/k/kianianc/.conda/envs/hza_tagger/bin/python",
-        # DESY NAF flavour — adjust for your site
+        python="/data/dust/user/kianianc/.conda/envs/hza_tagger/bin/python", #CHANGE TO WHERE YOUR ENV IS
+        # DESY NAF flavor — adjust for your site
         job_extra_directives={
             "+RequestRuntime": 3600,
             "universe": "vanilla",
@@ -218,7 +217,7 @@ def main():
     n = args.name
     if n != '': n = '_' + n
     futures = []
-    for i, file_path in enumerate(cfg["files"]):
+    for i, file_path in enumerate(cfg["files"]): # submit jobs
         out_path = str(outdir / f"chunk{n}_{i:04d}.h5")
         fut = client.submit(convert_one_file, file_path, out_path, cfg)
         futures.append(fut)
@@ -230,11 +229,11 @@ def main():
     
     # cooldown block
     print("Cleaning up Dask worker objects and flushing network filesystem buffers...")
-    del futures # Clear the memory tracking references to the worker nodes
-    gc.collect() # Force Python to run garbage collection immediately
+    del futures
+    gc.collect() # force garbage collection
     
     print("Waiting 10 seconds for cluster file handles to cleanly release...")
-    time.sleep(10) # Gives DESY AFS and Dask time to release file streams
+    time.sleep(10) # let files be released
 
     # merge chunks 
     if args.merge:

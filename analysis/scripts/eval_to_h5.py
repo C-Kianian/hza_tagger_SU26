@@ -132,14 +132,14 @@ def main():
                 # Calc edge features on the fly since salt doesnt save to h5
                 if input_name.upper() == "EDGE":
                     try:
-                        from salt.data.edge_features import get_inputs_edge
+                        from salt.utils.edge_features import calculate_edge_features
                     except ImportError:
                         print("Error: Could not import 'get_inputs_edge' from salt.data.edge_features.")
                         print("Ensure SALT is correctly installed and accessible in your python path.")
                         sys.exit(1)
 
                     # calc from tracks
-                    np_arr = get_inputs_edge(filtered_batch, var_list)
+                    np_arr = calculate_edge_features(filtered_batch, var_list)
                 else:
                     # stack only the variables listed in YAML
                     np_arr = np.stack([filtered_batch[v].astype(np.float32) for v in var_list], axis=-1)
