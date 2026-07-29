@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
-# Launch SALT training for the HZa binary tagger.
+# Launch SALT training for the HZa binary tagger. Run this condor version on naf!
 # Adjust --accelerator and --devices for your hardware.
 #
 # Comet.ml logging: put your API key in .env at the project root:
 #   echo "COMET_API_KEY=your_key_here" > .env
-# train.sh sources .env automatically and passes the key to CometLogger.
+# train_condor.sh sources .env automatically and passes the key to CometLogger.
 # Without a key the run falls back to offline mode (logs saved under logs/).
 #
 # Auto-discovers train/val/test H5 files from the data/ directory.
 # Override via environment variables or positional args.
 #
 # Usage:
-#   bash tagger/scripts/train.sh                         # auto-discover everything
-#   bash tagger/scripts/train.sh data/train.h5 data/val.h5 data/test.h5
-#   bash tagger/scripts/train.sh --rw 			 # auto reweight a classification task
-#   bash tagger/scripts/train.sh --normdict=path/to/dict # for a specific mass norm dict, default is 2_0
-#   bash tagger/scripts/train.sh --rename=some_name_here # the name to rename the standard hza_tagger_YMD_HMS out directory
-#   bash tagger/scripts/train.sh --config=path/to/cfg 	 # requires path to specfic training config
+#   bash tagger/scripts/train_condor.sh data/train.h5 data/val.h5 data/test.h5
+#   bash tagger/scripts/train_condor.sh                         # auto-discover everything
+#   bash tagger/scripts/train_condor.sh --rw 			              # auto reweight
+#   bash tagger/scripts/train_condor.sh --normdict=path/to/dict # for a specific norm dict
+#   bash tagger/scripts/train_condor.sh --rename=some_name_here # the name to rename the standard hza_tagger_YMD_HMS out dir
+#   bash tagger/scripts/train_condor.sh --config=path/to/cfg 	  # requires path to specific training config
 #
 # Environment overrides:
 #   TRAIN_FILE, VAL_FILE, TEST_FILE   explicit H5 paths
@@ -79,8 +79,6 @@ fi
 # ── Resolve CONFIG ────────────────────────────────────────────────────────────
 [[ -f "${CONFIG}" ]] || die "Config not found: ${CONFIG}"
 
-export CONFIG="${CONFIG}" #export env variable
-
 REGRESS=$(python common/parse_yaml.py --contains regress --config "${CONFIG}")
 # ── Auto-discover H5 files ────────────────────────────────────────────────────
 _pick_h5() {
@@ -95,7 +93,6 @@ _pick_h5() {
     echo "${f}"
 }
 
-# ── Clean file args before passing to salt ────────────────────────────────────
 if [[ -n "${1:-}" && "${1}" != --* ]]; then
     # Positional args detected
     TRAIN_FILE="${1}"
@@ -110,9 +107,6 @@ else
     TEST_FILE="$(_pick_h5  "${TEST_FILE:-}"  data/test.h5  data/test_out.h5)"
 fi
 
-export TRAIN_FILE="${TRAIN_FILE}"
-export VAL_FILE="${VAL_FILE}"
-export TEST_FILE="${TEST_FILE}"
 # == reweighting =================================================================
 if [[ "$RW" == true ]]; then
     if [[ "$REGRESS" == true ]]; then # case of multi tasking
@@ -127,17 +121,13 @@ if [[ "$RW" == true ]]; then
     fi
 fi
 
-#export env variable
-export W_BKG=${W_BKG}
-export W_SIG=${W_SIG}
-
 # == norm dict =================================================================
-[[ -f "${NORM_DICT}" ]] || die "Config not found: ${NORM_DICT}"
-NAME=hza_tagger_$(date +%Y%m%d_%H%M%S)
-EXTRA_DATA_ARGS="--data.norm_dict ${NORM_DICT}"
+if [[ -n "${NORM_DICT:-}" ]]; then
+    [[ -f "${NORM_DICT}" ]] || die "Norm dict not found: ${NORM_DICT}"
+    EXTRA_DATA_ARGS="--data.norm_dict ${NORM_DICT}"
+fi
 
-#export env variable
-export NORM_DICT=${NORM_DICT}
+NAME=hza_tagger_$(date +%Y%m%d_%H%M%S)
 
 info "Config:     ${CONFIG}"
 info "Train file: ${TRAIN_FILE}"
@@ -147,38 +137,21 @@ info "Run name:   ${NAME}"
 info "Norm dict:  ${NORM_DICT}"
 echo ""
 
-echo "==> Starting training: ${NAME}"
-# shellcheck disable=SC2086
-salt fit \
-    --config "${CONFIG}" \
-    --data.train_file "${TRAIN_FILE}" \
-    --data.val_file   "${VAL_FILE}" \
-    --data.test_file  "${TEST_FILE}" \
-    ${EXTRA_LOGGER_ARGS} \
-    ${EXTRA_LOSS_ARGS} \
-    ${EXTRA_DATA_ARGS} \
-    --trainer.accelerator gpu \
-    --trainer.devices 1 \
-    --force \
-    "$@"
-    # don't think accelerator or devices args make a difference?
+# export all vars to be used by submit script
+export NAME="${NAME}"
+export RENAME="${RENAME}"
+export CONFIG="${CONFIG}"
+export TRAIN_FILE="${TRAIN_FILE}"
+export VAL_FILE="${VAL_FILE}"
+export TEST_FILE="${TEST_FILE}"
+export NORM_DICT="${NORM_DICT}"
+export W_BKG="${W_BKG}"
+export W_SIG="${W_SIG}"
+export COMET_EXPERIMENT_NAME="${NAME}"
+export EXTRA_LOGGER_ARGS="${EXTRA_LOGGER_ARGS:-}"
+export EXTRA_LOSS_ARGS="${EXTRA_LOSS_ARGS:-}"
+export EXTRA_DATA_ARGS="${EXTRA_DATA_ARGS:-}"
 
-# == Option to rename the output dir ===========================================
-TRAIN_STATUS=$?
-LATEST_DIR=$(ls -td logs/hza_tagger_* 2>/dev/null | head -n 1)
-
-if [[ -n "${RENAME}" && -d "${LATEST_DIR:-}" ]]; then
-    if [[ "${LATEST_DIR}" != "logs/${RENAME}" ]]; then
-        echo "==> Clean up: Moving output directory to logs/${RENAME}"
-        if [[ -d "logs/${RENAME}" ]]; then
-            SAFE_NAME="logs/${RENAME}_fallback_$(date +%H%M%S)"
-            echo "    [Warning] logs/${RENAME} already exists! Saving to ${SAFE_NAME} instead."
-            mv "$LATEST_DIR" "$SAFE_NAME"
-        else
-            mv "$LATEST_DIR" "logs/${RENAME}"
-        fi
-    fi
-fi
-
-# 4. Exit with the original training status so batch scripts know if it failed
-exit $TRAIN_STATUS
+# find and execute submit script
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+bash "${SCRIPT_DIR}/submit_condor.sh"

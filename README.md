@@ -51,30 +51,13 @@ bash tagger/scripts/setup_salt.sh
 ```
 
 <details>
-<summary>Helpful, but not required, tip!</summary>
+<summary>Tip!</summary>
 
-After running steps 1 and 2 once they can be simplified into a single command to save time. It is best to ask someone or AI for your specific setup. Here is my `~/.bashrc` example:
-
+After running steps 1 and 2, the next time you log in do: 
 ```bash
-# Shortcut to jump straight into the tagger project
-go_tagger() {
-    # 1. Navigate to your project repository (Replace with your actual absolute path!)
-    cd /path/to/hza_tagger_SU26/ || return
-
-    # 2. Activate the environment
-    conda activate hza_tagger
-
-    # 3. Run the salt setup script
-    bash tagger/scripts/setup_salt.sh
-
-    echo "🚀 hza_tagger env and Salt setup are ready!"
-}
+conda activate hza_tagger 
 ```
-Then everytime I log in I simply run:
-```bash
-go_tagger
-```
-And after ~1 min everything is set up
+and you are good to go!
 </details>
 
 ### 3. Prepare the converter config
@@ -113,7 +96,7 @@ python converter/run_condor.py \
     --merge
 ```
 
-Importantly, the condor script only produces one merged file, it is necessary to split this into train/test/val, this can be done via:
+Importantly, the condor script produces one merged file or many split files, it is necessary to make train/test/val files, this can be done via:
 
 ```bash
 python converter/make_train_test_val.py \ # check the script to see all args
@@ -155,9 +138,9 @@ python analysis/scripts/data_validation_scripts/sig_vs_bkg_plots.py
 --plot 
 ```
 
-Additionally, one can include `--atlas` to plot ATLAS paper variables; `--edg` for `Salt` edge features; or set a max number of events to plot with `--maxEvents=N`
+Additionally, one can include `--atlas` to plot ATLAS paper variables; `--edg` for `Salt` edge features; or set a max number of events to plot with `--maxEvents=67` for example.
 
-Also included is `analysis/scripts/data_validation_scripts/sig_vs_sig_plots.py`, which plots different h5 files against each other.
+Also included is `analysis/scripts/data_validation_scripts/sig_vs_sig_plots.py`, which plots different signal h5 files against each other.
 
 ### 6. Preprocess + train
 
@@ -169,8 +152,13 @@ Open this page and read it please: [https://docs.desy.de/naf/documentation/gpu-o
 bash tagger/scripts/preprocess.sh   # computes normalisation dict
 bash tagger/scripts/train.sh        # launches SALT training
 ```
+On naf, one can also run via a condor submission to make use of faster GPUs:
+```bash
+bash tagger/scripts/preprocess.sh   # computes normalisation dict
+bash tagger/scripts/train_condor.sh # launches SALT training via a condor submission
+```
 
-On DESY NAF GPU nodes, add `--trainer.accelerator gpu --trainer.devices 1` to `train.sh`.
+Check both the training and preprocess scripts for additional arguments you can add. On DESY NAF GPU nodes, add `--trainer.accelerator gpu --trainer.devices 1` to `train.sh`. (Cyrus: not sure if this is necessary, in my test this did not seem to make a difference).
 
 **Comet.ml logging** is enabled automatically when a `COMET_API_KEY` is present.
 
@@ -236,7 +224,7 @@ CKPT=logs/my_run/checkpoints/best.ckpt \
 PLOT_DIR=analysis/plots/my_run \
 bash analysis/scripts/evaluate.sh
 ```
-One can also specifiy `--modeldir=/path/to/logs`, the path to the directory that is the parent of `ckpts`, to make use of the best model finding feature rather than having to explicity pass it themselves
+One can also specifiy `--modeldir=/path/to/logs`, the path to the directory that is the parent of `ckpts`, to make use of the best model finding feature rather than having to explicity pass the best model themselves
 
 
 ### 7.1. Additional Analysis

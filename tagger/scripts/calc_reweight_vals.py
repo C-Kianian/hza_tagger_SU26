@@ -85,9 +85,9 @@ def main():
         n_bkg = len(labels) - n_sig
 
         # calc reweight vals
-        if BCE: w_sig, _ = calculate_classifier_vals(n_sig, n_bkg)
+        if BCE: w_pos, _ = calculate_classifier_vals(n_sig, n_bkg)
         else: w_bkg, w_sig = calculate_classifier_vals(n_sig, n_bkg)
-        print(f"{w_bkg} {w_sig}") if not BCE else print(f"{w_sig}")
+        print(f"{w_bkg} {w_sig}") if not BCE else print(f"{w_pos}")
 
 if __name__ == '__main__':
     main()
