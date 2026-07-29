@@ -32,7 +32,6 @@ model:
           out_dim: &out_dim 64
           mha_config:
             num_heads: 4
-            attention: { class_path: salt.models.ScaledDotProductAttention }
           dense_config:
             activation: *activation
 
@@ -124,10 +123,10 @@ trainer:
   logger:
     class_path: lightning.pytorch.loggers.CometLogger
     init_args:
-      project_name: hza_tagger
-      save_dir: logs
-      offline: false
-      display_summary_level: 0
+      project: hza_tagger
+      #save_dir: logs
+      online: true
+      #display_summary_level: 0
 
   callbacks:
     - class_path: salt.callbacks.Checkpoint

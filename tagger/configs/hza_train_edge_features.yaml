@@ -25,24 +25,23 @@ model:
             hidden_layers: [128]
             activation: &activation ReLU
               
-        - input_name: EDGE
+      edge_init_nets:
+        - input_name: tracks
           dense_config:
-            input_size: 8
             output_size: &edge_embed_dim 32
             hidden_layers: [32]
             activation: *activation
 
       encoder:
-        class_path: salt.models.TransformerEncoder
+        class_path: salt.models.Transformer
         init_args:
           embed_dim: *embed_dim
           num_layers: 3
-          edge_embed_dim: 32
+          edge_embed_dim: *edge_embed_dim
           out_dim: &out_dim 64
-          mha_config:
+          attn_kwargs:
             num_heads: 4
-            attention: { class_path: salt.models.ScaledDotProductAttention }
-          dense_config:
+          dense_kwargs:
             activation: *activation
 
       pool_net:
@@ -93,7 +92,7 @@ data:
     tracks: tracks
     EDGE: tracks
 
-      # the variables used in training set here
+  # the variables used in training set here
   variables:
     jets:
       - pt
@@ -103,8 +102,8 @@ data:
       #- trk_multi
     tracks:
       - pt
-      - eta_rel
-      - phi_rel
+      - eta
+      - phi #eta, phi are required to be explicitly passed for edge feature calculation
       - mass
       - charge
       - pdgId
@@ -114,13 +113,16 @@ data:
       - dzSig
       - trkQuality
       - puppiWeight
-    EDGE:
-      - dR
-      - z
-      - kt
-      #- subjetIndex
-      - isSelfLoop
-      #- mass
+
+  edge_constructors:
+    - input_name: tracks
+      edge_features:
+        - dR
+        - z
+        - kt
+        #- subjetIndex
+        - isSelfLoop
+        #- mass
 
   batch_size:  1024
   num_workers: 0
@@ -142,10 +144,10 @@ trainer:
   logger:
     class_path: lightning.pytorch.loggers.CometLogger
     init_args:
-      project_name: hza_tagger
-      save_dir: logs
-      offline: false
-      display_summary_level: 0
+      project: hza_tagger
+      #save_dir: logs
+      online: true
+      #display_summary_level: 0
 
   callbacks:
     - class_path: salt.callbacks.Checkpoint

@@ -22,7 +22,7 @@ model:
           dense_config:
             input_size: 7
             hidden_layers: [35, 35, 35, 35]
-            output_size: 35
+            output_size: &output_size 35
             activation: &activation ReLU
 
       encoder: null
@@ -37,9 +37,9 @@ model:
                 name: jet_regression
                 input_name: jets
                 targets: truth_a_mass
-                loss: HuberLoss
+                loss: torch.nn.HuberLoss
                 dense_config:
-                  input_size: 35
+                  input_size: *output_size
                   output_size: 1  
                   hidden_layers: []
                   activation: *activation
@@ -83,10 +83,10 @@ trainer:
   logger:
     class_path: lightning.pytorch.loggers.CometLogger
     init_args:
-      project_name: atlas_2025
-      save_dir: logs
-      offline: false
-      display_summary_level: 0
+      project: atlas_2025
+      #save_dir: logs
+      online: true
+      #display_summary_level: 0
 
   callbacks:
     - class_path: salt.callbacks.Checkpoint

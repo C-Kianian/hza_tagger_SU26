@@ -4,8 +4,7 @@
 # Requires SALT to be checked out at tagger/salt/ (see README).
 # Adjust data.train_file / val_file / test_file to your H5 paths.
 
-name: hza_tagger_regressor_multi_task
-
+name: hza_tagger_v4_regressor_multi_task
 
 model:
   lrs_config:
@@ -25,24 +24,24 @@ model:
             hidden_layers: [128]
             activation: &activation ReLU
 
-        - input_name: EDGE
+      edge_init_nets:
+        - input_name: tracks
           dense_config:
-            input_size: 8
             output_size: &edge_embed_dim 32
             hidden_layers: [32]
             activation: *activation
 
       encoder:
-        class_path: salt.models.TransformerEncoder
+        class_path: salt.models.Transformer
         init_args:
           embed_dim: *embed_dim
           num_layers: 3
-          edge_embed_dim: 32
+          edge_embed_dim: *edge_embed_dim
+          update_edges: true
           out_dim: &out_dim 64
-          mha_config:
+          attn_kwargs:
             num_heads: 4
-            attention: { class_path: salt.models.ScaledDotProductAttention }
-          dense_config:
+          dense_kwargs:
             activation: *activation
 
       pool_net:
@@ -79,7 +78,7 @@ model:
                 loss:
                   class_path: torch.nn.HuberLoss
                   init_args: # set to default
-                    reduction: none # other options: none, sum
+                    reduction: none # options: none, mean, sum, must be none for sample_weight
                     delta: 1.0      # can be any value, determines where the loss behavior 'switches'
                 sample_weight: regression_mass_weight # weights loaded here
                 dense_config:
@@ -102,16 +101,20 @@ data:
 
   # Labels to read from each input dataset
   # a_jet is stored as a field inside the jets H5 dataset
-  labels:
-    jets:
-      - a_jet
+  #labels:
+  #  jets:
+  #    - truth_a_mass
+  #    - a_jet
+  #    - binary_classification_weight
+  #    - regression_mass_weight
+  # In Salt v0.13.0 these only need to be specified above in the different tasks, but doesn't break if added here
 
   input_map:
     jets: jets
     tracks: tracks
-    EDGE: tracks
 
-    # the variables used in training set here
+  # the variables used in training set here
+  # in Salt v0.13.0 the variables used for edge features must be specified here
   variables:
     jets:
       - pt
@@ -121,8 +124,8 @@ data:
       #- trk_multi
     tracks:
       - pt
-      - eta_rel
-      - phi_rel
+      - eta
+      - phi #eta, phi are required to be explicitly passed for edge feature calculation
       - mass
       - charge
       - pdgId
@@ -132,13 +135,16 @@ data:
       - dzSig
       - trkQuality
       - puppiWeight
-    EDGE:
-      - dR
-      - z
-      - kt
-      #- subjetIndex
-      - isSelfLoop
-      #- mass
+
+  edge_constructors:
+    - input_name: tracks
+      edge_features:
+        - dR
+        - z
+        - kt
+        #- subjetIndex
+        - isSelfLoop
+        #- mass
 
   batch_size:  1024
   num_workers: 0
@@ -160,10 +166,10 @@ trainer:
   logger:
     class_path: lightning.pytorch.loggers.CometLogger
     init_args:
-      project_name: hza_tagger
-      save_dir: logs
-      offline: false
-      display_summary_level: 0
+      project: hza_tagger
+      #save_dir: logs
+      online: true
+      #display_summary_level: 0
 
   callbacks:
     - class_path: salt.callbacks.Checkpoint

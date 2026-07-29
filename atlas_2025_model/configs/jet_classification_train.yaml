@@ -22,7 +22,7 @@ model:
           dense_config:
             input_size: 8
             hidden_layers: [10, 10, 10]
-            output_size: 10
+            output_size: &output_size 10
             activation: &activation ReLU
       
       encoder: null
@@ -42,9 +42,9 @@ model:
                 loss:
                   class_path: torch.nn.BCEWithLogitsLoss
                   init_args:
-                    pos_weight: [1.0] # ADD REWEIGHTING HERE [BKG,SIG]
+                    pos_weight: [1.0] # ADD REWEIGHTING HERE [SIG]
                 dense_config:
-                  input_size: 10
+                  input_size: *output_size
                   output_size: 1  
                   hidden_layers: []
                   activation: *activation
@@ -60,7 +60,7 @@ data:
   num_train: -1
   num_val: -1
   num_test: -1
-  # for handeling very large/negative numbers 
+  # for handling very large/negative numbers
   non_finite_to_num: true
   ignore_finite_checks: false  # Keeps guardrails up but fixes the numbers
 
@@ -95,10 +95,10 @@ trainer:
   logger:
     class_path: lightning.pytorch.loggers.CometLogger
     init_args:
-      project_name: atlas_2025
-      save_dir: atlas_logs
-      offline: false
-      display_summary_level: 0
+      project: atlas_2025
+      #save_dir: atlas_logs
+      online: true
+      #display_summary_level: 0
 
   callbacks:
     - class_path: salt.callbacks.Checkpoint
