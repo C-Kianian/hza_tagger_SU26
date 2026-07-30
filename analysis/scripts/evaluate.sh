@@ -129,8 +129,8 @@ info "Checkpoint: ${CKPT}"
 info "Config:     ${TRAIN_CFG}"
 
 # get info from config
-ATLAS=$(python common/parse_yaml.py --contains atlas --config "${TRAIN_CFG}")
-REGRESS=$(python common/parse_yaml.py --contains regress --config "${TRAIN_CFG}")
+ATLAS=$(python common/parse_yaml.py --in-name atlas --config " ${TRAIN_CFG}")
+REGRESS=$(python common/parse_yaml.py --in-name regress --config "${TRAIN_CFG}")
 CFG_NAME=$(python common/parse_yaml.py --get name --config "${TRAIN_CFG}")
 # ── Derive output paths ───────────────────────────────────────────────────────
 # Put scores next to the test file: test.h5 → test_scores.h5

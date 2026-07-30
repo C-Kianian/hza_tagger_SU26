@@ -12,7 +12,7 @@ The project has several sub-parts which are explained below:
 
 ```
 hza_tagger/
-├── common/             shared label defs, truth matching, IO schema, variable lists
+├── common/             shared label defs, truth matching, IO schema, variable lists, useful scripts
 ├── converter/          btvNanoAOD ROOT → H5 (coffea, columnar)
 ├── tagger/             SALT submodule + training configs and scripts
 ├── atlas_2025_model/   Replica of ATLAS 2025 model in Salt (see literature)
@@ -119,6 +119,7 @@ Most of my work can be found in:
 │   ├── 1st_run         The original h5 processing run
 │   ├── 2nd_run         Adds eta, phi track info for edge features
 │   ├── 3rd_run         Adds ATLAS features, filter, and truth-failing daughter info
+    └── 4th_run         Add different sample weights for robust salt reweighting
 │   └── test_sig        Test signal files guaranteed to work
 ├── model_logs/         Includes logs and checkpoints for trained models
 ├── plots/              Plots for the models and data
@@ -126,6 +127,7 @@ Most of my work can be found in:
 ```
 
 The different versions of models are detailed [here](https://docs.google.com/presentation/d/1hy5rmuNpHurtNS1Z8F4DmpsISaKPKuabucHzqMwENwk/edit?usp=sharing)
+Note that the older data "runs" may not work with the updated scripts, ie. 1st_run does not work with edge features, 2nd_run with ATLAS features, etc. 
 
 </details>
 
@@ -152,7 +154,7 @@ Open this page and read it please: [https://docs.desy.de/naf/documentation/gpu-o
 bash tagger/scripts/preprocess.sh   # computes normalisation dict
 bash tagger/scripts/train.sh        # launches SALT training
 ```
-On naf, one can also run via a condor submission to make use of faster GPUs:
+On naf, one can also run via a condor submission to make use of faster GPUs. This submits the `SALT` training command via condor, `train_condor.sh` is run the same way you would `train.sh`:
 ```bash
 bash tagger/scripts/preprocess.sh   # computes normalisation dict
 bash tagger/scripts/train_condor.sh # launches SALT training via a condor submission
@@ -180,15 +182,15 @@ Check both the training and preprocess scripts for additional arguments you can 
 
 ### 6.1. Preprocess + train (ATLAS version)
 ```bash
-python atlas_2025_model/scripts/event_mask.py 
+python common/event_mask.py 
   --infile /path/to/data \
   --outdir /path/to/dir \ 
   --mask sample_name \    # applies ATLAS selection criteria (ie. atlas_valid)
   # This can also be used to filter files into only signal/background events
   
-bash tagger/scripts/preprocess.sh /path/to/your/train/file # computes normalisation dict
+bash atlas_2025_model/scripts/preprocess.sh /path/to/your/train/file # computes normalisation dict
 
-bash tagger/scripts/train.sh 
+bash atlas_2025_model/scripts/train.sh 
   /path/to/your/train/file \
   /path/to/your/val/file \
   /path/to/your/test/file  # launches SALT training

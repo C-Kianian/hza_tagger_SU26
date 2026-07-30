@@ -81,7 +81,7 @@ fi
 
 export CONFIG="${CONFIG}" #export env variable
 
-REGRESS=$(python common/parse_yaml.py --contains regress --config "${CONFIG}")
+REGRESS=$(python common/parse_yaml.py --in-name regress --config "${CONFIG}")
 # ── Auto-discover H5 files ────────────────────────────────────────────────────
 _pick_h5() {
     local val="${1}"; shift

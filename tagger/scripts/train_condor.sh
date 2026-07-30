@@ -79,7 +79,7 @@ fi
 # ── Resolve CONFIG ────────────────────────────────────────────────────────────
 [[ -f "${CONFIG}" ]] || die "Config not found: ${CONFIG}"
 
-REGRESS=$(python common/parse_yaml.py --contains regress --config "${CONFIG}")
+REGRESS=$(python common/parse_yaml.py --in-name regress --config "${CONFIG}")
 # ── Auto-discover H5 files ────────────────────────────────────────────────────
 _pick_h5() {
     local val="${1}"; shift

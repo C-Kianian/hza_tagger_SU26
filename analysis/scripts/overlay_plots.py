@@ -9,7 +9,6 @@ Usage
     python analysis/scripts/plots.py \\
         --scores data/test_scores.h5 \\
         --outdir analysis/plots/
-        --atlas  #specified if using ATLAS classifier
 """
 
 from __future__ import annotations

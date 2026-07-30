@@ -14,7 +14,7 @@ def parse_args():
     p.add_argument("--config", required=True, help="YAML config file")
     group = p.add_mutually_exclusive_group(required=True) # only one action can and must be specified
     group.add_argument("--get", help="Dot-separated path")
-    group.add_argument("--contains", help="Substring to search in config name")
+    group.add_argument("--in-name", help="Substring to search in config name")
     return p.parse_args()
 
 
