@@ -1,7 +1,7 @@
 jets:
   pt:
-    mean: 48.515915
-    std: 31.335072
+    mean: 48.515919
+    std: 31.335073
   eta:
     mean: 0.006059
     std: 1.294428
@@ -14,7 +14,13 @@ jets:
 tracks:
   pt:
     mean: 5.37395
-    std: 11.675746
+    std: 11.675747
+  eta:
+    mean: 0.011518
+    std: 1.287338
+  phi:
+    mean: -0.00457
+    std: 1.81707
   eta_rel:
     mean: 6.5e-05
     std: 0.151474
@@ -29,13 +35,13 @@ tracks:
     std: 0.821657
   pdgId:
     mean: 19.591383
-    std: 169.256638
+    std: 169.256653
   dxy:
     mean: 0.0
     std: 1.0
   dz:
     mean: -0.338845
-    std: 4.776853
+    std: 4.776852
   dxySig:
     mean: 0.0
     std: 1.0

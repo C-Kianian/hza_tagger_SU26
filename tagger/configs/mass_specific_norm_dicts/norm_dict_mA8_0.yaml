@@ -1,7 +1,7 @@
 jets:
   pt:
-    mean: 49.191696
-    std: 31.893723
+    mean: 49.1917
+    std: 31.893721
   eta:
     mean: 0.002004
     std: 1.300168
@@ -9,12 +9,18 @@ jets:
     mean: -0.003394
     std: 1.816983
   mass:
-    mean: 5.675566
+    mean: 5.675567
     std: 3.892252
 tracks:
   pt:
     mean: 5.498139
-    std: 12.104185
+    std: 12.104187
+  eta:
+    mean: 0.002794
+    std: 1.293882
+  phi:
+    mean: -0.004152
+    std: 1.819237
   eta_rel:
     mean: 9.6e-05
     std: 0.155759
@@ -44,7 +50,7 @@ tracks:
     std: 1.0
   trkQuality:
     mean: 3.407419
-    std: 2.326465
+    std: 2.326464
   puppiWeight:
     mean: 0.987707
     std: 0.045478
