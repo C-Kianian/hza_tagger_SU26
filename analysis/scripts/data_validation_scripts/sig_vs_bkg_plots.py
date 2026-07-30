@@ -24,8 +24,12 @@ import gc
 import hist
 from argparse import ArgumentParser
 from pathlib import Path
+import torch
+
+import logging
+logging.getLogger("matplotlib.font_manager").setLevel(logging.ERROR) # silence can't find font errors
 try:
-    from salt.utils.edge_features import calculate_edge_features
+    from salt.utils.edge_features import calculate_edge_features, check_edge_config
 except ImportError:
     print("Error: Could not import 'get_inputs_edge' from salt.data.edge_features.")
     print("Ensure SALT is correctly installed and accessible in your python path.")
@@ -48,7 +52,6 @@ args = parser.parse_args()
 FILE = args.file
 MAX_EVENTS = args.maxEvents
 PLOT = args.plot
-ATLAS = args.atlas
 OUTDIR = args.outdir
 EDGE = args.edg
 hists = []
@@ -171,6 +174,7 @@ def plot_hist(to_plot, labels, x, name, y="Entries", norm=False, global_norm=Fal
     plt.close(fig)
 
 def main():
+    do_atlas = args.atlas if args.atlas else False
     with h5py.File(FILE, "r") as f:
         # print the file content
         print("===============================================================================================")
@@ -196,7 +200,7 @@ def main():
                 "phi":  r"$\phi^{jet}$",
                 "mass": "$m^{jet} [GeV/c^{2}]$",
             }
-            if ATLAS:
+            if do_atlas:
                 atlas_labels = {
                     "atlas_valid": "ATLAS valid",
                     "trk_multi": "Track multiplicity",
@@ -212,8 +216,8 @@ def main():
                     "dR": r"$\Delta R^{\mathrm{edge}}$",
                     "kt":  r"$\mathrm{k_{t}} [GeV]$",
                     "z":  r"$\mathrm{z}$",
-                    #"subjetIndex":  "Subjet Index", for now these are skipped as the energy info and the subjetIdk info is not stored
-                    #"mass": "$m^{edge} [GeV/c^{2}]$",
+                    "subjetIndex":  "Subjet Index",
+                    "mass": "$m^{edge} [GeV/c^{2}]$",
                     "isSelfLoop":  "Is Self Loop" # always keep as last var, do not move
                 }
 
@@ -234,6 +238,7 @@ def main():
 
             ############ JET INFO ############
             # pt, mass, eta, phi for all jets
+            print(f"============ Jet variable plots ============")
             true_jet_names = jets.dtype.names
             for jet_var, jet_xtitle in jet_labels.items():
                 if jet_var not in true_jet_names:
@@ -246,12 +251,18 @@ def main():
                 plot_hist(to_plot=[sig_jet_var, bkg_jet_var], labels=["Signal", "Background"], x=jet_xtitle, name=f"jet_{jet_var}", norm=True, subdir="jet_plots")
 
             ####### ATLAS JET INFO ############
-            if ATLAS:
+            try:
                 atlas_mask = jets["atlas_valid"].ravel()
                 mass_mask = jets["truth_a_mass"].ravel()
                 atlas_sig_mask = atlas_mask & (labels == 1)
                 atlas_bkg_mask = atlas_mask & (labels == 0)
+            except (KeyError, ValueError) as e: # ensure the atlas vars exist and are filled
+                print(f"====== Issue with ATLAS vars: {e} ======")
+                print( "============    Skipping ATLAS Vars    ============")
+                do_atlas = False
 
+            if do_atlas:
+                print(f"========= ATLAS jet variable plots =========")
                 for atlas_var, atlas_xtitle in atlas_labels.items():
                     if atlas_var not in true_jet_names:
                         print(f"Missing atlas variable: {atlas_var}")
@@ -298,6 +309,7 @@ def main():
             true_track_names = tracks.dtype.names
 
             # all tracks vars, pt, eta_rel, phi_rel, mass, charge, pdgId, dxy, dz, dxySig, dzSig, trkQuality, puppiWeight
+            print(f"=========== track variable plots ===========")
             for trk_var, trk_xtitle in trk_labels.items():
 
                 if trk_var not in true_track_names:
@@ -312,6 +324,7 @@ def main():
                           name=f"trk_{trk_var}", norm=True, subdir="trk_plots")
 
             ############ MULTIPLICITY INFO ###########
+            print(f"=========== derived info plots ===========")
 
             # track multiplicity
             trk_valid = tracks['valid']
@@ -380,27 +393,60 @@ def main():
 
             ############ (OPTIONAL) EDGE FEATURE INFO ###########
             if EDGE:
-                try:
-                    edges = calculate_edge_features(tracks, edge_labels.keys()) # try to calc edge features (N events, N trks, N trks, num_edg_feats)
-                    feature_names = list(edge_labels.keys())
-                except ValueError as e:
-                    print(f"Issue when trying to calculate edge features: {e}")
+                print(f"=========== Edge info plots ===========")
+                skip = False
+                EDGE_REQUIREMENTS = { # if salt adds more edge features this will need updating
+                    "dR": ["eta", "phi"],
+                    "kt": ["eta", "phi", "pt"],
+                    "z": ["pt"],
+                    "isSelfLoop": [],
+                    "subjetIndex": ["subjetIndex"],
+                    "mass": ["pt", "eta", "phi", "energy"],
+                }
 
-                feature_idx = {name: i for i, name in enumerate(feature_names)} # associate returned features with a name
-                self_loop  = edges[..., feature_idx["isSelfLoop"]] == 1.0
+                valid_features = []
+                for feat in edge_labels: # check each edge feature if we can calc, if not skip
+                    try:
+                        check_edge_config([feat], true_track_names)
+                        valid_features.append(feat) # add to valid list
+                    except ValueError as e:
+                        print(f"Skipping {feat}: {e}")
 
-                for edg_var, edg_xtitle in edge_labels.items():
-                    vals = edges[..., feature_idx[edg_var]] # get feature
+                if not valid_features: # ensure there is a valid feature, else quit
+                    print("No valid edge features available.")
+                    return
 
-                    loop_vals = vals[self_loop] # seperate by self loops
-                    link_vals = vals[~self_loop]
-                    if edg_var == "isSelfLoop": 
-                        plot_hist(to_plot=[loop_vals, link_vals], labels=[r"$i=j$", r"$i \neq j$"], x=edg_xtitle, # plot
-                                  global_norm=True, logy=True, name=f"edge_{edg_var}", subdir="optional_edge_feature_plots")
-                        continue
+                required_vars = set() # get the vars required to calc these valid features
+                for feat in valid_features:
+                    required_vars.update(EDGE_REQUIREMENTS[feat])
 
-                    plot_hist(to_plot=[loop_vals, link_vals], labels=[r"$i=j$", r"$i \neq j$"], x=edg_xtitle, # plot
-                              norm=True, logy=True, name=f"edge_{edg_var}", subdir="optional_edge_feature_plots")
+                tensor_vars = sorted(required_vars) # get required vars, make map of indices to feats
+                indices_map = {var: i for i, var in enumerate(tensor_vars)}
+
+                # make inputs into a tensor as required by salt
+                tracks_tensor = torch.tensor(np.stack([tracks[var] for var in tensor_vars], axis=-1), dtype=torch.float32)
+                # calc edge features
+                edges = calculate_edge_features(tracks_tensor, indices_map, valid_features)
+
+                feature_idx = {name: i for i, name in enumerate(valid_features)} # associate features with a name
+                if "isSelfLoop" not in valid_features: # need for the plots, this is required if --edg specified
+                    print("Skipping edges, isSelfLoop is required for plotting...")
+                    skip = True
+                self_loop = edges[..., feature_idx["isSelfLoop"]] == 1
+
+                if not skip:
+                    for feat in valid_features: # plot features we can calc
+                        vals = edges[..., feature_idx[feat]] # get feature
+                        loop_vals = vals[self_loop] # separate by self loops
+                        link_vals = vals[~self_loop]
+
+                        if feat == "isSelfLoop": # plot self loop differently
+                            plot_hist(to_plot=[loop_vals, link_vals], labels=[r"$i=j$", r"$i \neq j$"], x=edge_labels[feat],
+                                      global_norm=True, logy=True, name=f"edge_{feat}", subdir="optional_edge_feature_plots")
+                            continue
+
+                        plot_hist(to_plot=[loop_vals, link_vals], labels=[r"$i=j$", r"$i \neq j$"], x=edge_labels[feat], # plot
+                                  norm=True, logy=True, name=f"edge_{feat}", subdir="optional_edge_feature_plots")
 
 
 

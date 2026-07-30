@@ -16,7 +16,7 @@ except ImportError as e:
     print(f"Missing dependency: {e}; If Shap, to stay consistent with Salt, run: pip install \"shap\" \"numpy<2\"")
     sys.exit(1)
 
-# Ensure repository root is in python path (matching your eval script)
+# check that we are within the python env
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 def parse_args():
