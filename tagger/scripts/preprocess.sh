@@ -7,7 +7,7 @@
 
 set -euo pipefail
 
-# arg for the mass input as: 2_0, 1_5 etc
+# arg for the mass input as: 2_0, 1_5 etc, or name, gets added as either norm_dict_{mass} or norm_dict_{name}
 POSITIONAL=()
 
 while [[ $# -gt 0 ]]; do
@@ -28,7 +28,7 @@ while [[ $# -gt 0 ]]; do
             NAME="$2"
             shift 2
             ;;
-    
+
     	  *)
             POSITIONAL+=("$1")
             shift
@@ -61,7 +61,7 @@ fi
 
 
 echo "==> Computing normalisation statistics from ${TRAIN_FILE} …"
-"${PYTHON}" tagger/scripts/create_norm_dict.py \
+"${PYTHON}" common/create_norm_dict.py \
     --input   "${TRAIN_FILE}" \
     --config  "${VARIABLES}" \
     --output  "${NORM_DICT}"

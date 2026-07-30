@@ -168,7 +168,7 @@ if [[ "$REGRESS" == true ]]; then
 else
     if [[ "$RW" == true ]]; then    
         echo "==> Computing reweighting from ${TRAIN_FILE} …"
-        read -r W_POS < <("${PYTHON}" tagger/scripts/calc_reweight_vals.py --file "${TRAIN_FILE}" --bce)
+        read -r W_POS < <("${PYTHON}" common/calc_reweight_vals.py --file "${TRAIN_FILE}" --bce)
     else
         W_POS=1.0
     fi

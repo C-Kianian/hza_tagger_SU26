@@ -25,14 +25,14 @@ model:
             activation: &activation ReLU
 
       encoder:
-        class_path: salt.models.TransformerEncoder
+        class_path: salt.models.Transformer
         init_args:
           embed_dim: *embed_dim
           num_layers: 3
           out_dim: &out_dim 64
-          mha_config:
+          attn_kwargs:
             num_heads: 4
-          dense_config:
+          dense_kwargs:
             activation: *activation
 
       pool_net:

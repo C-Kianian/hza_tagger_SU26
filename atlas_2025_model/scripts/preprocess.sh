@@ -7,7 +7,7 @@
 
 set -euo pipefail
 
-# arg for the mass input as: 2_0, 1_5 etc
+# arg for the regression task
 POSITIONAL=()
 
 REGRESS=false
@@ -47,7 +47,7 @@ fi
 
 
 echo "==> Computing normalisation statistics from ${TRAIN_FILE} …"
-"${PYTHON}" tagger/scripts/create_norm_dict.py \
+"${PYTHON}" common/create_norm_dict.py \
     --input   "${TRAIN_FILE}" \
     --config  "${VARIABLES}" \
     --output  "${NORM_DICT}"

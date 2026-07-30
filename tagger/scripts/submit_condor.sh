@@ -96,7 +96,7 @@ exit \$TRAIN_STATUS
 EOF
 chmod +x "${WORKER_SCRIPT}"
 
-# make submit file + worker requirements, job.sub
+# make submit file + worker requirements, job.sub, 2 hrs = 7200
 cat << EOF > "${SUB_FILE}"
 universe              = vanilla
 executable            = ${WORKER_SCRIPT}
@@ -107,9 +107,9 @@ log                   = ${FINAL_DIR}/condor.log
 getenv                = True
 request_gpus          = 1
 request_cpus          = 4
-request_memory        = 16GB
+request_memory        = 8GB
 Requirements          = (GPUs_Capability >= 7.0)
-+RequestRuntime       = 14400
++RequestRuntime       = 7200
 queue 1
 EOF
 
@@ -121,11 +121,15 @@ echo "${SUB_OUTPUT}"
 CLUSTER_ID=$(echo "${SUB_OUTPUT}" | grep -oE 'cluster [0-9]+' | awk '{print $2}' || true)
 
 if [[ -n "${CLUSTER_ID}" ]]; then
-    echo "================================================================================"
+    echo "=========================================================================================================================="
     echo " Training submitted to HTCondor queue!"
     echo " Final Directory: ${FINAL_DIR}"
     echo " Monitor output:  tail -f ${FINAL_DIR}/condor.out"
     echo " Check queue:     condor_q ${CLUSTER_ID}"
     echo " Remove job:      condor_rm ${CLUSTER_ID}"
-    echo "================================================================================"
+    echo " Useful naf info: https://docs.desy.de/naf/documentation/gpu-on-naf/"
+    echo " Useful naf commands:"
+    echo " condor_status -constraint 'GPUs >= 1'  "
+    echo " condor_status -constraint 'gpus >= 1' -af:h Name GPUs_Capability GPUs_DeviceName  GPUs_DriverVersion GPUs_GlobalMemoryMb "
+    echo "=========================================================================================================================="
 fi
