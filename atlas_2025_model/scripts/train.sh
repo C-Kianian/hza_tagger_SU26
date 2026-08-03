@@ -11,16 +11,16 @@
 # Override via environment variables or positional args.
 #
 # Usage:
-#   bash atlas_2025_model/scripts/train.sh                          			# auto-discover everything
+#   bash atlas_2025_model/scripts/train.sh                          			        # auto-discover everything
 #   bash atlas_2025_model/scripts/train.sh data/train.h5 data/val.h5 data/test.h5	# specify all file paths
-#   bash atlas_2025_model/scripts/train.sh --rw 			 		# auto reweight a classification task
-#   bash atlas_2025_model/scripts/train.sh --mask=atlas_mask       			# Apply a mask to the events, ie. atlas_mask
-#   bash atlas_2025_model/scripts/train.sh --rename=some_name_here 			# the name to rename the standard hza_tagger_YMD_HMS out directory
-#   bash atlas_2025_model/scripts/train.sh --regression            			# to train the regression mass estimator model
+#   bash atlas_2025_model/scripts/train.sh --rw 			 		                        # auto reweight a classification task
+#   bash atlas_2025_model/scripts/train.sh --mask=atlas_mask       			          # Apply a mask to the events, ie. atlas_mask
+#   bash atlas_2025_model/scripts/train.sh --rename=some_name_here 			          # the name to rename the standard hza_tagger_YMD_HMS out directory
+#   bash atlas_2025_model/scripts/train.sh --regression            			          # to train the regression mass estimator model
 #
 # Environment overrides:
 #   TRAIN_FILE, VAL_FILE, TEST_FILE   explicit H5 paths
-#   CONFIG                            YAML config (default: tagger/configs/hza_train.yaml)
+#   CONFIG                            YAML config (default: atlas_2025_model/configs/jet_classification_train.yaml)
 
 set -euo pipefail
 
@@ -41,9 +41,9 @@ POSITIONAL=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
     	--rename=*)   RENAME="${1#*=}" ;;
-	--rw)         RW=true ;;
-	--regression) REGRESS=true ;;
-	*)
+	    --rw)         RW=true ;;
+	    --regression) REGRESS=true ;;
+	    *)
             POSITIONAL+=("$1")
             ;;
     esac

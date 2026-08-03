@@ -1,5 +1,5 @@
 # Working point definitions for the HZa tagger
-# Used by analysis/scripts/plots.py
+# Used by analysis/scripts/model_plotting/plots_classification.py
 
 working_points:
   loose:

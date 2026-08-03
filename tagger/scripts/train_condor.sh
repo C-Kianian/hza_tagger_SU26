@@ -20,7 +20,7 @@
 #
 # Environment overrides:
 #   TRAIN_FILE, VAL_FILE, TEST_FILE   explicit H5 paths
-#   CONFIG                            YAML config (default: tagger/configs/hza_train.yaml)
+#   CONFIG                            YAML config
 
 set -euo pipefail
 

@@ -7,8 +7,8 @@ Produces:
 
 Usage
 -----
-    python analysis/scripts/plots.py \\
-        --scores data/test_scores.h5 \\
+    python analysis/scripts/model_plotting/mass_specific_classifier_plots.py \\
+        --file data/test_scores.h5 \\
         --outdir analysis/plots/
         --atlas  #specified if using ATLAS classifier
 """

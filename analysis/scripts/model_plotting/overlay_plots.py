@@ -6,8 +6,8 @@ Produces:
 
 Usage
 -----
-    python analysis/scripts/plots.py \\
-        --scores data/test_scores.h5 \\
+    python analysis/scripts/model_plotting/overlay_plots.py \\
+        --files  data/test_scores.h5 \\
         --outdir analysis/plots/
 """
 
