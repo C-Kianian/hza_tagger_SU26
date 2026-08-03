@@ -203,13 +203,29 @@ The evaluation script auto-discovers the test H5 file, the most recent checkpoin
 ```bash
 bash analysis/scripts/evaluate.sh --config=/path/to/train_cfg --plot 
 ```
+<details>
+<summary>Likely error</summary>
+If you see a similar error to this:
+
+```bash
+SALT not installed.  Run: bash tagger/scripts/setup_salt.sh
+Full error: /lib64/libstdc++.so.6: version CXXABI_1.3.15 not found (required by your/path/to/.conda/envs/hza_tagger/lib/python3.11/site-packages/scipy/fft/_pocketfft/pypocketfft.cpython-311-x86_64-linux-gnu.so)
+```
+
+Run:
+```bash
+export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
+```
+And it should be fixed! 
+
+</details>
 
 Note: This script works for ATLAS models too
 
 It runs two steps in sequence and writes plots to `analysis/plots_in_file_name/`
 
 1. **Score** — `eval_to_h5.py` loads the best checkpoint and appends a `scores` dataset (shape `(N, 2)`) to a copy of the test H5.
-2. **Plot** — `plots.py` produces ROC curves, score distributions, and efficiency vs pT/η.
+2. **Plot** — `plots_classification.py` produces ROC curves, score distributions, and efficiency vs pT/η.
 
 **Override any path** (best practice) via argument or environment variable:
 
@@ -226,14 +242,17 @@ CKPT=logs/my_run/checkpoints/best.ckpt \
 PLOT_DIR=analysis/plots/my_run \
 bash analysis/scripts/evaluate.sh
 ```
-One can also specifiy `--modeldir=/path/to/logs`, the path to the directory that is the parent of `ckpts`, to make use of the best model finding feature rather than having to explicity pass the best model themselves
+One can specifiy `--modeldir=/path/to/logs`, the path to the directory that is the parent of `ckpts`, to make use of the best model finding feature rather than having to explicity pass the best model themselves. Also, specifiying `--plotsdir=/path/to/plots` allows the user to dictate where the plots end up. The pltting scripts run by `analysis/scripts/evaluate.sh` should work for multitask mass regression and jet classification models, as of now the regression script is only "lightly" tested. 
 
 
 ### 7.1. Additional Analysis
-Additional analysis scripts, under `analysis/scripts`, that are not already run by default in `evaluate.sh` include:
+Additional analysis scripts, under `analysis/scripts/model_plotting`, that are not already run by default in `evaluate.sh` include:
 1. `mass_specific_classifier_plots.py` which plots the different masses and ATLAS paper masses for a classifier trained on all mass points
 2. `overlay_plots.py` which currently adds different ROC curves to the same plot 
+3. `shap_atlas.py` that plots the feature importance for the ATLAS classifier
 
+## Help
+Cyrus: If you encounter any errors or have any questions please feel free to reach out! Ideally, you link the specific commit and command run to produce the issues, or the piece(s) of code you would like help understanding. 
 
 ## Tests
 

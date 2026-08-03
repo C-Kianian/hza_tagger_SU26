@@ -8,7 +8,8 @@
 #   evaluate.sh [TEST_FILE] [CKPT] [--run RUN_NAME]
 #
 # Examples
-#   evaluate.sh --dir path/to/my/ckpts/dir (ie. logs/hza_tagger_YYMMDD)
+#   evaluate.sh --modeldir path/to/my/ckpts/dir (ie. logs/hza_tagger_YYMMDD)
+#   evaluate.sh --plotsdir path/to/my/plots     (where you wants plots stored, otherwise named: plots_<config_name>)
 #   evaluate.sh data/test.h5 --run my_training_run
 #   evaluate.sh data/test.h5 logs/my_run/ckpts/best.ckpt
 #
@@ -27,7 +28,8 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "${PROJECT_ROOT}"
 
 # add arg for which  dir to search for model checkpoint
-DIR="${DIR:-}"
+MODEL_DIR="${MODEL_DIR:-}"
+PLOTS_DIR="${PLOTS_DIR:-}"
 TRAIN_CFG="${TRAIN_CFG:-}" # arg for the training config
 PLOTS=false
 
@@ -36,11 +38,11 @@ POSITIONAL=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --modeldir)
-            DIR="$2"
+            MODEL_DIR="$2"
             shift 2
             ;;
 	      --modeldir=*)
-	          DIR="${1#*=}"
+	          MODEL_DIR="${1#*=}"
 	          shift 1
 	          ;;
         --config)
@@ -49,6 +51,14 @@ while [[ $# -gt 0 ]]; do
 	          ;;
 	      --config=*)
 	          TRAIN_CFG="${1#*=}"
+	          shift 1
+	          ;;
+        --plotsdir)
+            PLOTS_DIR="$2"
+            shift 2
+            ;;
+	      --plotsdir=*)
+	          PLOTS_DIR="${1#*=}"
 	          shift 1
 	          ;;
         --plot)
@@ -97,9 +107,9 @@ fi
 info "Test file:  ${TEST_FILE}"
 
 # ── Resolve CKPT ──────────────────────────────────────────────────────────────
-if [[ -n "${DIR}" ]]; then
-    [[ -d "${DIR}" ]] || die "Dir not found: ${DIR}"
-    info "Ckpts dir:     ${DIR}"
+if [[ -n "${MODEL_DIR}" ]]; then
+    [[ -d "${MODEL_DIR}" ]] || die "Dir not found: ${MODEL_DIR}"
+    info "Ckpts dir:     ${MODEL_DIR}"
 fi
 
 if [[ -n "${2:-}" ]]; then
@@ -109,8 +119,8 @@ elif [[ -z "${CKPT:-}" ]]; then
     # Pick the checkpoint with the lowest val_loss by parsing the filename.
     # Also handles the conventional best.ckpt name for other SALT versions.
     _best_by_loss() {
-        local DIR="${DIR:-*}"
-        ls -1 ${DIR}/ckpts/*.ckpt ${DIR}ckpts/*.ckpt logs/ckpts/*.ckpt logs/*/version_*/ckpts/*.ckpt logs/checkpoints/best.ckpt 2>/dev/null \
+        local MODEL_DIR="${MODEL_DIR:-*}"
+        ls -1 ${MODEL_DIR}/ckpts/*.ckpt ${MODEL_DIR}ckpts/*.ckpt logs/ckpts/*.ckpt logs/*/version_*/ckpts/*.ckpt logs/checkpoints/best.ckpt 2>/dev/null \
             | awk -F'val_loss=' '
                 NF==2 { val=$2; sub(/\.ckpt$/,"",val); print val, $0 }
                 NF==1 { print "best", $0 }
@@ -129,28 +139,19 @@ info "Checkpoint: ${CKPT}"
 info "Config:     ${TRAIN_CFG}"
 
 # get info from config
-ATLAS=$(python common/parse_yaml.py --in-name atlas --config " ${TRAIN_CFG}")
+ATLAS=$(python common/parse_yaml.py --in-name atlas --config "${TRAIN_CFG}")
 REGRESS=$(python common/parse_yaml.py --in-name regress --config "${TRAIN_CFG}")
-CFG_NAME=$(python common/parse_yaml.py --get name --config "${TRAIN_CFG}")
+CLASS=$(python common/parse_yaml.py --in-name tag --config "${TRAIN_CFG}" || python common/parse_yaml.py --in-name class --config "${TRAIN_CFG}")
+CFG_NAME=$(python common/parse_yaml.py --get_value name --config "${TRAIN_CFG}")
 # ── Derive output paths ───────────────────────────────────────────────────────
 # Put scores next to the test file: test.h5 → test_scores.h5
 _base="$(basename "${TEST_FILE}" .h5)"
 _dir="$(dirname "${TEST_FILE}")"
-SCORES_FILE="${SCORES_FILE:-${_dir}/${_base}_salt_scores.h5}"
-if [[ "${REGRESS}" == true ]]; then
-    SCORES_FILE="${SCORES_FILE:-${_dir}/${_base}_regression_scores.h5}"
-fi
-if [[ "${ATLAS}" == true ]]; then
-    SCORES_FILE="${SCORES_FILE:-${_dir}/${_base}_atlas_classification_scores.h5}"
-    if [[ "${REGRESS}" == true ]]; then
-        SCORES_FILE="${SCORES_FILE:-${_dir}/${_base}_atlas_regression_scores.h5}"
-    fi
-fi
-#PLOT_DIR="${PLOT_DIR:-analysis/plots}"
-PLOT_DIR="${PLOT_DIR:-analysis/plots${_base:+_${_base}}_salt}"
+SCORES_FILE="${SCORES_FILE:-${_dir}/${_base}_scores.h5}"
+PLOT_DIR="${PLOT_DIR:-plots_${CFG_NAME}}"
 
 info "Scores:     ${SCORES_FILE}"
-#info "Plots dir:  ${PLOT_DIR}"
+info "Plots dir:  ${PLOT_DIR}"
 echo ""
 
 # ── Step 1: score ─────────────────────────────────────────────────────────────
@@ -174,34 +175,17 @@ fi
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  Step 2 / 2  —  Producing plots"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+CFG_NAME=$(python common/parse_yaml.py --get name --config "${TRAIN_CFG}")
 if [[ "${REGRESS}" == true ]]; then
-    if [[ "${ATLAS}" == true ]]; then # atlas regression case
-	PLOT_DIR="${PLOT_DIR}_atlas_regression"
-        "${PYTHON}" analysis/scripts/plots_regression.py \
-        --scores "${SCORES_FILE}" \
-        --outdir "${PLOT_DIR}" \
-    	  --eval   "atlas_regression_a_mass"
-    else # our regression model case
-	PLOT_DIR="${PLOT_DIR}_atlas_classifier"
-        "${PYTHON}" analysis/scripts/plots_regression.py \
-        --scores "${SCORES_FILE}" \
-        --outdir "${PLOT_DIR}" \
-    	  --eval  "regression_a_mass"
-    fi
-else # out jet classifier case
-      PLOT_DIR="${PLOT_DIR}_${CFG_NAME}"
-      if [[ "${ATLAS}" == true ]]; then
-    	  "${PYTHON}" analysis/scripts/shap_atlas.py \
-    	  --input   "${SCORES_FILE}" \
-    	  --ckpt    "${CKPT}" \
-    	  --output  "${PLOT_DIR}/atlas_shap_summary.png" \
-    	  --config  "${TRAIN_CFG}" \
-    	  --nsamples 10000
-      fi 
-      "${PYTHON}" analysis/scripts/plots.py \
+  "${PYTHON}" analysis/scripts/model_plotting/plots_regression.py \
+    --scores "${SCORES_FILE}" \
+    --outdir "${PLOT_DIR}"
+fi
+if [[ "${CLASS}" == true ]]; then # out jet classifier case
+      "${PYTHON}" analysis/scripts/model_plotting/plots_classification.py \
           --scores "${SCORES_FILE}" \
           --outdir "${PLOT_DIR}" \
-	        --atlas  "${ATLAS}"
+	        --config "${TRAIN_CFG}"
 fi
 
 

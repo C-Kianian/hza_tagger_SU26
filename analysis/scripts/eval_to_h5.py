@@ -10,7 +10,7 @@ Usage
     python analysis/scripts/eval_to_h5.py \\
         --input  data/test.h5 \\
         --ckpt   logs/hza_tagger/.../ckpts/epoch=080-val_loss=0.06297.ckpt \\
-        --config tagger/configs/hza_train.yaml \\
+        --config tagger/configs/v1_v2_hza_train.yaml \\
         --output data/test_scores.h5
 """
 
@@ -20,6 +20,7 @@ import argparse
 import shutil
 import sys
 from pathlib import Path
+import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
@@ -43,6 +44,15 @@ def parse_args():
     p.add_argument('--regression', type=str2bool, default=False, help='include if evaluating a regression model')
     return p.parse_args()
 
+def make_dataset(fout, name, shape):
+    ds_name = name
+    ds_shape = shape
+
+    if ds_name in fout: # make empty scores dataset
+        del fout[ds_name]
+    output_ds = fout.create_dataset(ds_name, shape=ds_shape, dtype=np.float32, compression="gzip")
+    return output_ds
+
 
 def main():
     args = parse_args()
@@ -50,7 +60,6 @@ def main():
     try:
         import torch
         import h5py
-        import numpy as np
         import yaml
     except ImportError as e:
         print(f"Missing dependency: {e}")
@@ -59,8 +68,9 @@ def main():
     # Load SALT ModelWrapper via Lightning's standard checkpoint loading
     try:
         from salt.modelwrapper import ModelWrapper
-    except ImportError:
+    except ImportError as e:
         print("SALT not installed.  Run: bash tagger/scripts/setup_salt.sh")
+        print(f"Full error: {e}")
         sys.exit(1)
 
     print(f"Loading checkpoint: {args.ckpt}")
@@ -86,6 +96,7 @@ def main():
     shutil.copy2(args.input, args.output)
 
     from common.io import JETS_DATASET, TRACKS_DATASET
+    from common.parse_yaml import get_tasks
 
     with (h5py.File(args.input, "r") as fin, h5py.File(args.output, "a") as fout):
         # use jet dataset for count of n events
@@ -94,13 +105,9 @@ def main():
 
         n_jets = fin[primary_jet_ds].shape[0] # n events
 
-        ds_name = "predictions" if args.regression else "scores"
-        ds_shape = (n_jets, 1) if args.regression or args.atlas else (n_jets, 2) # only our classifier outputs two predictions
-
-        if ds_name in fout: # make empty scores dataset
-            del fout[ds_name]
-        output_ds = fout.create_dataset(ds_name, shape=ds_shape, dtype=np.float32, compression="gzip")
-
+        output_datasets_dict = {} # dict to store output datasets, needed for multitasking
+        names, task_types, losses = get_tasks(config) # get the task info, needed for multitasking
+        task_lookup = dict(zip(names, task_types)) # lookup to ensure what is returned matches yaml cfg
 
         # batch processing
         for start in range(0, n_jets, args.batch_size):
@@ -129,22 +136,8 @@ def main():
 
                 filtered_batch = batch_data[selection_mask] # in case selection criteria applied
 
-                # Calc edge features on the fly since salt doesnt save to h5
-                if input_name.upper() == "EDGE":
-                    try:
-                        from salt.utils.edge_features import calculate_edge_features
-                    except ImportError:
-                        print("Error: Could not import 'get_inputs_edge' from salt.data.edge_features.")
-                        print("Ensure SALT is correctly installed and accessible in your python path.")
-                        sys.exit(1)
-
-                    # calc from tracks
-                    np_arr = calculate_edge_features(filtered_batch, var_list)
-                else:
-                    # stack only the variables listed in YAML
-                    np_arr = np.stack([filtered_batch[v].astype(np.float32) for v in var_list], axis=-1)
-                    np_arr = np.nan_to_num(np_arr, nan=-1.0, posinf=-1.0, neginf=-1.0) # remove placeholders
-
+                np_arr = np.stack([filtered_batch[v].astype(np.float32) for v in var_list], axis=-1)
+                np_arr = np.nan_to_num(np_arr, nan=-1.0, posinf=-1.0, neginf=-1.0) # remove placeholders
 
                 inputs[input_name] = torch.from_numpy(np_arr).to(device)
 
@@ -154,25 +147,52 @@ def main():
                     pad_masks[input_name] = ~valid_t  # True = padded/ignored
 
             # ── Forward pass ─────────────────────────────────────────────────
-            # SALT 0.11 ModelWrapper.forward(inputs, pad_masks) → (preds, loss, ...)
+            # SALT 0.13 ModelWrapper.forward(inputs, pad_masks) → (preds, loss, ...)
             with torch.no_grad():
-                preds, *_ = model(inputs, pad_masks)
+                preds, *_ = model(inputs, pad_masks) # preds is a dict: {"jets": {"jets_classification": logits}}
 
-            if args.regression: # mass regression task
-                reg_scores = preds["jets"]["jet_regression"]
-                processed_outputs = reg_scores.cpu().numpy().squeeze(-1) # (num_selected_jets,)
+            jet_level_preds = preds["jets"] # if predictions are made on the track level this script does nothing
 
-                batch_mass = fout[primary_jet_ds]['regression_a_mass', start:stop] # get mass preds for the batch
-                batch_mass[selection_mask] = processed_outputs # update the jets passing selection criteria
-                if args.atlas: fout[primary_jet_ds]['atlas_regression_a_mass', start:stop] = batch_mass # write info to file
-                else: fout[primary_jet_ds]['regression_a_mass', start:stop] = batch_mass # write info to file
-                processed_outputs = processed_outputs[:, np.newaxis]
-            else: # classification task
-                # preds is a dict: {"jets": {"jets_classification": logits}}
-                logits = preds["jets"]["jets_classification"] # (B, out_dim), account for different loss funcs
-                processed_outputs = torch.sigmoid(logits).cpu().numpy() if args.atlas else torch.softmax(logits, dim=-1).cpu().numpy() # make into probs (B, out_dim)
+            for name, score in jet_level_preds.items():
+                # create dataset based on the results from preds
+                score_name = f"{name}_preds" if 'regress' in name else f"{name}_scores" # name of dataset to store in
+                if score_name not in output_datasets_dict:
+                    # score is a torch tensor with shape (B,) or (B, out_dim)
+                    if score.ndim == 1: shape = (n_jets,) # get shapes of model outputs
+                    else: shape = (n_jets, score.shape[1])
+                    output_datasets_dict[score_name] = make_dataset(fout, score_name, shape) # create datasets w/ correct shapes
 
-            output_ds[start:stop] = processed_outputs # write batch predictions
+
+                task_type = task_lookup[name] # predictions for classifier/regressor
+                if task_type is None:
+                    print(f"Task '{name}' not found in config, skipping...")
+                    continue
+
+                if task_type == "RegressionTask": processed_outputs = score.cpu().numpy().squeeze(-1)
+                elif task_type == "ClassificationTask":
+                    if "atlas" in name:
+                        processed_outputs = torch.sigmoid(score).cpu().numpy() # ATLAS uses BCE requires different handling
+                    else:
+                        processed_outputs = torch.softmax(score, dim=-1).cpu().numpy()
+                else: continue
+
+                out_ds = output_datasets_dict[score_name] # store in specific dataset
+
+                batch_size = stop - start
+                out_shape = out_ds.shape[1:]      # () or (2,)
+
+                if len(out_shape) == 0: batch_output = np.full(batch_size, np.nan, dtype=np.float32)
+                else: batch_output = np.full((batch_size, *out_shape), np.nan, dtype=np.float32)
+
+                if task_type == "RegressionTask":
+                    # write info to file, for regression tasks where the output may be used as input to another model
+                    if "atlas" in name: fout[primary_jet_ds]["atlas_regression_a_mass", start:stop] = processed_outputs
+                    else: fout[primary_jet_ds]["regression_a_mass", start:stop] = processed_outputs
+                    processed_outputs = processed_outputs[:, None]
+
+                batch_output[selection_mask] = processed_outputs
+                out_ds[start:stop] = batch_output # write batch predictions
+
             print(f"  {stop}/{n_jets} jets scored")
 
     print(f"\nScores written to: {args.output}")

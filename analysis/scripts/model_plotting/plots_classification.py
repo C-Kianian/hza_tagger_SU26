@@ -8,7 +8,7 @@ Produces:
 
 Usage
 -----
-    python analysis/scripts/plots.py \\
+    python analysis/scripts/model_plotting/plots_classification.py \\
         --scores data/test_scores.h5 \\
         --outdir analysis/plots/
 """
@@ -79,6 +79,8 @@ def main():
 
     for task, info in per_task_dict.items(): # makes plots per classification task
         pt, eta, labels, scores = info["pt"], info["eta"], info["labels"], info["scores"] # get task info
+        taskdir = outdir / task
+        taskdir.mkdir(parents=True, exist_ok=True)
 
         sig = labels == 1
         bkg = labels == 0
@@ -95,7 +97,7 @@ def main():
         ax.set_xlim(0, 1)
         ax.legend()
         ax.set_title("ROC — a-jet vs other")
-        fig.savefig(outdir / task / "roc.pdf", bbox_inches="tight")
+        fig.savefig(taskdir / "roc.pdf", bbox_inches="tight")
         plt.close(fig)
         print("Saved roc.pdf")
 
@@ -107,7 +109,7 @@ def main():
         ax.set_xlabel("P(a-jet)")
         ax.set_ylabel("Normalised counts")
         ax.legend()
-        fig.savefig(outdir / task / "score_dist.pdf", bbox_inches="tight")
+        fig.savefig(taskdir / "score_dist.pdf", bbox_inches="tight")
         plt.close(fig)
         print("Saved score_dist.pdf")
 
@@ -146,7 +148,7 @@ def main():
         ax.set_ylim(0, 1)
         ax.legend()
         ax.set_title(f"Efficiency vs $p_T$ (cut at WP {wp_main:.0%})")
-        fig.savefig(outdir / task / "eff_vs_pt.pdf", bbox_inches="tight")
+        fig.savefig(taskdir / "eff_vs_pt.pdf", bbox_inches="tight")
         plt.close(fig)
         print("Saved eff_vs_pt.pdf")
 
@@ -175,7 +177,7 @@ def main():
         ax.set_ylim(0, 1)
         ax.legend()
         ax.set_title(f"Efficiency vs $\eta$ (cut at WP {wp_main:.0%})")
-        fig.savefig(outdir / task / "eff_vs_eta.pdf", bbox_inches="tight")
+        fig.savefig(taskdir / "eff_vs_eta.pdf", bbox_inches="tight")
         plt.close(fig)
         print("Saved eff_vs_eta.pdf")
 
