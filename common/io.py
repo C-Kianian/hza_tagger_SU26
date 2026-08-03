@@ -21,7 +21,7 @@ JET_DTYPE = np.dtype([
     ("eta",                                 np.float32),
     ("phi",                                 np.float32),
     ("mass",                                np.float32),
-    ("jet_regression_a_mass",                   np.float32), # for our specific regression output later, after initial write this is all 0
+    ("jet_regression_a_mass_preds",         np.float32), # for our specific regression output later, after initial write this is all 0
 
     # Truth labels for jet-classification task
     ("a_jet",                               np.int32),    # truth label: 1=a-jet, 0=background
@@ -37,7 +37,7 @@ JET_DTYPE = np.dtype([
 
     # ATLAS specific features (available for all jets, set = 0 for those that fail ATLAS criteria)
     ("atlas_valid",                         np.bool_),    # flag for events passing ATLAS criteria
-    ("jet_atlas_regression_a_mass",             np.float32),  # for atlas regression output later, after initial write this is all 0
+    ("jet_atlas_regression_a_mass_preds",   np.float32),  # for atlas regression output later, after initial write this is all 0
     ("trk_multi",                           np.int32),    # number of tracks in jet
     ("lead_trk_rel_system_pt",              np.float32),  # lead trk pt / sum trk pt
     ("lead_trk_dr",                         np.float32),  # dR of leading trk to jet
