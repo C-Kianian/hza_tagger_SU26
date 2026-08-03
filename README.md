@@ -33,7 +33,9 @@ hza_tagger/
 - ATLAS Collaboration. Search for Higgs Boson Decays into a 𝑍 Boson and a Light Hadronically Decaying Resonance Using 13 TeV 𝑝⁢𝑝 Collision Data from the ATLAS Detector. Phys. Rev. Lett. 125, 221802 – Published 25 November, 2020. https://doi.org/10.1103/PhysRevLett.125.221802
 - ATLAS Collaboration. Search for Higgs boson decays into a Z boson and a light hadronically decaying resonance in pp collisions at 13 TeV with the ATLAS detector. Physics Letters B Volume 868, September 2025, 139671. https://doi.org/10.1016/j.physletb.2025.139671
 
-
+## Additional `salt` information
+- [`salt` docs](https://ftag-salt.docs.cern.ch)
+- [`salt` v0.13.0 GitHub repo](https://github.com/umami-hep/salt/tree/0.13.0) (The version currently used by this project)
 ## Quick start
 
 ### 1. Environment
@@ -259,4 +261,5 @@ Cyrus: If you encounter any errors or have any questions please feel free to rea
 ```bash
 pytest -v
 ```
+
 

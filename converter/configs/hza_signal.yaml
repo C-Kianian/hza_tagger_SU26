@@ -26,6 +26,9 @@ files:
   # additional 10 (or 1?) million mA=1.0 signal samples
   #- /pnfs/desy.de/cms/tier2/store/user/mjalalva/ggH_HZa_signals/RunIII2024Summer24/ggH_HZa_mA1_0GeV/RunIII2024Summer24/2607*/0*/RunIII2024Summer24BTVNanoAllPF*.root
   # ===================================================================
+  # additional 10 (or 1?) million mA=2.0 signal samples
+  #- /pnfs/desy.de/cms/tier2/store/user/mjalalva/ggH_HZa_signals/RunIII2024Summer24/ggH_HZa_mA2_0GeV/RunIII2024Summer24/2607*/0*/RunIII2024Summer24BTVNanoAllPF*.root
+  # ===================================================================
   # test signal, should work 
   #- /pnfs/desy.de/cms/tier2/store/user/pgadow/ggH_HZa_signals/RunIII2024Summer24/ggH_HZa_mA1_0GeV/RunIII2024Summer24HZANanoAllPF/260429_152454/0000/hzanano_output_*.root
   # ===================================================================
