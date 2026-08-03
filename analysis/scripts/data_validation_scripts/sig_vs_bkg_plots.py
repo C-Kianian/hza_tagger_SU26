@@ -28,33 +28,10 @@ import torch
 
 import logging
 logging.getLogger("matplotlib.font_manager").setLevel(logging.ERROR) # silence can't find font errors
-try:
-    from salt.utils.edge_features import calculate_edge_features, check_edge_config
-except ImportError:
-    print("Error: Could not import 'get_inputs_edge' from salt.data.edge_features.")
-    print("Ensure SALT is correctly installed and accessible in your python path.")
-    sys.exit(1)
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 hep.style.use("CMS")
-
-parser = ArgumentParser()
-parser.add_argument('--file', type=str, required=True, help='path to the file for analysis')
-parser.add_argument('--maxEvents', type=int, default=None, help='max amount of events to analyze')
-parser.add_argument('--plot', action='store_true', help='set true for all the jet/track plots to be made')
-parser.add_argument('--atlas', action='store_true', help='set true for plots with ATLAS variables')
-parser.add_argument('--edg', action='store_true', help='set true for plots with edge features calculated')
-parser.add_argument("--outdir", default="analysis/default_plot_outdir")
-args = parser.parse_args()
-
-# get file path and set up histogram tracker
-FILE = args.file
-MAX_EVENTS = args.maxEvents
-PLOT = args.plot
-OUTDIR = args.outdir
-EDGE = args.edg
-hists = []
 
 def print_val(file):
     # display the content of the file
@@ -118,6 +95,9 @@ def calculate_bin_edges(plots, n_bins_float=50):
     return ll, ul, n_bins_float + 1
 
 def plot_hist(to_plot, labels, x, name, y="Entries", norm=False, global_norm=False, logy=False, logx=False, subdir=None):
+    """
+    A "one size fits all" plotting function
+    """
     # quick checks, ensure same lengths, less than color length, and non empty
     if len(to_plot) != len(labels): raise ValueError("to_plot and labels must have the same length")
     if len(to_plot) > 10: raise ValueError("Not enough colors for this many plots.")
@@ -173,6 +153,66 @@ def plot_hist(to_plot, labels, x, name, y="Entries", norm=False, global_norm=Fal
 
     plt.close(fig)
 
+def get_edge_feats(tracks):
+    """
+    Calculates salt edge features from h5 tracks dataset, to be used by other analysis scripts
+    """
+    try: # ensure salt installed properly
+        from salt.utils.edge_features import calculate_edge_features, check_edge_config
+    except ImportError:
+        print("Error: Could not import 'get_inputs_edge' from salt.data.edge_features.")
+        print("Ensure SALT is correctly installed and accessible in your python path.")
+        sys.exit(1)
+
+    # requirements for each edge feature as specified by salt
+    EDGE_REQUIREMENTS = { # if salt adds more edge features this will need updating
+        "dR": ["eta", "phi"],
+        "kt": ["eta", "phi", "pt"],
+        "z": ["pt"],
+        "isSelfLoop": [],
+        "subjetIndex": ["subjetIndex"],
+        "mass": ["pt", "eta", "phi", "energy"],
+    }
+    # edge labels for plotting
+    edge_labels = {
+        "dR": r"$\Delta R^{\mathrm{edge}}$",
+        "kt":  r"$\mathrm{k_{t}} [GeV]$",
+        "z":  r"$\mathrm{z}$",
+        "subjetIndex":  "Subjet Index",
+        "mass": "$m^{edge} [GeV/c^{2}]$",
+        "isSelfLoop":  "Is Self Loop" # always keep as last var, do not move
+    }
+    true_track_names = tracks.dtype.names
+
+    valid_features = []
+    for feat in edge_labels: # check each edge feature if we can calc, if not skip
+        try:
+            check_edge_config([feat], true_track_names)
+            valid_features.append(feat) # add to valid list
+        except ValueError as e:
+            print(f"Skipping {feat}: {e}")
+
+    if not valid_features: # ensure there is a valid feature, else quit
+        print("No valid edge features available.")
+        return
+
+    required_vars = set() # get the vars required to calc these valid features
+    for feat in valid_features:
+        required_vars.update(EDGE_REQUIREMENTS[feat])
+
+    tensor_vars = sorted(required_vars) # get required vars, make map of indices to feats
+    indices_map = {var: i for i, var in enumerate(tensor_vars)}
+
+    # make inputs into a tensor as required by salt
+    tracks_tensor = torch.tensor(np.stack([tracks[var] for var in tensor_vars], axis=-1), dtype=torch.float32)
+    # calc edge features
+    edges = calculate_edge_features(tracks_tensor, indices_map, valid_features)
+
+    feature_idx = {name: i for i, name in enumerate(valid_features)} # associate features with a name
+
+    return edges, valid_features, feature_idx, edge_labels
+
+
 def main():
     do_atlas = args.atlas if args.atlas else False
     with h5py.File(FILE, "r") as f:
@@ -210,15 +250,6 @@ def main():
                     "U1_0p7": r"$U_1^{0.7}$",
                     "M2_0p3": r"$M_2^{0.3}$",
                     "tau2": r"$\tau_2$ (N-Subjettiness)",
-                }
-            if EDGE:
-                edge_labels = {
-                    "dR": r"$\Delta R^{\mathrm{edge}}$",
-                    "kt":  r"$\mathrm{k_{t}} [GeV]$",
-                    "z":  r"$\mathrm{z}$",
-                    "subjetIndex":  "Subjet Index",
-                    "mass": "$m^{edge} [GeV/c^{2}]$",
-                    "isSelfLoop":  "Is Self Loop" # always keep as last var, do not move
                 }
 
             trk_labels = {
@@ -393,48 +424,14 @@ def main():
 
             ############ (OPTIONAL) EDGE FEATURE INFO ###########
             if EDGE:
-                print(f"=========== Edge info plots ===========")
                 skip = False
-                EDGE_REQUIREMENTS = { # if salt adds more edge features this will need updating
-                    "dR": ["eta", "phi"],
-                    "kt": ["eta", "phi", "pt"],
-                    "z": ["pt"],
-                    "isSelfLoop": [],
-                    "subjetIndex": ["subjetIndex"],
-                    "mass": ["pt", "eta", "phi", "energy"],
-                }
-
-                valid_features = []
-                for feat in edge_labels: # check each edge feature if we can calc, if not skip
-                    try:
-                        check_edge_config([feat], true_track_names)
-                        valid_features.append(feat) # add to valid list
-                    except ValueError as e:
-                        print(f"Skipping {feat}: {e}")
-
-                if not valid_features: # ensure there is a valid feature, else quit
-                    print("No valid edge features available.")
-                    return
-
-                required_vars = set() # get the vars required to calc these valid features
-                for feat in valid_features:
-                    required_vars.update(EDGE_REQUIREMENTS[feat])
-
-                tensor_vars = sorted(required_vars) # get required vars, make map of indices to feats
-                indices_map = {var: i for i, var in enumerate(tensor_vars)}
-
-                # make inputs into a tensor as required by salt
-                tracks_tensor = torch.tensor(np.stack([tracks[var] for var in tensor_vars], axis=-1), dtype=torch.float32)
-                # calc edge features
-                edges = calculate_edge_features(tracks_tensor, indices_map, valid_features)
-
-                feature_idx = {name: i for i, name in enumerate(valid_features)} # associate features with a name
+                edges, valid_features, feature_idx, edge_labels = get_edge_feats(tracks)
                 if "isSelfLoop" not in valid_features: # need for the plots, this is required if --edg specified
                     print("Skipping edges, isSelfLoop is required for plotting...")
                     skip = True
                 self_loop = edges[..., feature_idx["isSelfLoop"]] == 1
-
                 if not skip:
+                    print(f"=========== Edge info plots ===========")
                     for feat in valid_features: # plot features we can calc
                         vals = edges[..., feature_idx[feat]] # get feature
                         loop_vals = vals[self_loop] # separate by self loops
@@ -451,6 +448,23 @@ def main():
 
 
 if __name__ == "__main__":
+    parser = ArgumentParser()
+    parser.add_argument('--file', type=str, required=True, help='path to the file for analysis')
+    parser.add_argument('--maxEvents', type=int, default=None, help='max amount of events to analyze')
+    parser.add_argument('--plot', action='store_true', help='set true for all the jet/track plots to be made')
+    parser.add_argument('--atlas', action='store_true', help='set true for plots with ATLAS variables')
+    parser.add_argument('--edg', action='store_true', help='set true for plots with edge features calculated')
+    parser.add_argument("--outdir", default="analysis/default_plot_outdir")
+    args = parser.parse_args()
+
+    # get file path and set up histogram tracker
+    FILE = args.file
+    MAX_EVENTS = args.maxEvents
+    PLOT = args.plot
+    OUTDIR = args.outdir
+    EDGE = args.edg
+    hists = []
+
     main()
 
 

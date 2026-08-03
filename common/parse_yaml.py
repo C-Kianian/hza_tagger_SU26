@@ -4,7 +4,6 @@ File: parse_yaml.py
 This script was made to parse a yaml config, in particular a training config file, used in evaluate.sh
 """
 import argparse
-from operator import contains
 from pathlib import Path
 import yaml
 
@@ -31,6 +30,35 @@ def in_name(cfg, substring):
     name = cfg.get("name", "")
     return substring.lower() in name.lower()
 
+def get_tasks(cfg):
+    # get a list of tasks that the model performs, returns [task_names], [task_types]
+    try:
+        modules = get_value(cfg, "model.model.init_args.tasks.init_args.modules") # get modules list
+    except (KeyError, IndexError, TypeError):
+        return [], []
+
+    names = []
+    tasks = []
+    losses = []
+
+    for module in modules: # for each module
+        class_path = module.get("class_path", "") # get the salt task name
+        init_args = module.get("init_args", {}) # get init args which will contain the user defined name
+
+        # get the name set by user
+        name = init_args.get("name", "")
+        # get loss path
+        loss_path = init_args.get("loss", "").get("class_path", "")
+
+        # get only the task and loss names
+        task_type = class_path.split(".")[-1] if class_path else "UnknownTask"
+        loss = loss_path.split(".")[-1] if loss_path else "UnknownLoss"
+
+        names.append(name)
+        tasks.append(task_type)
+        losses.append(loss)
+
+    return names, tasks, losses # names of the tasks, the SALT task name, the loss used
 
 def main():
     args = parse_args()
@@ -50,9 +78,9 @@ def main():
         else: print(value)
         return
 
-    name_contains = args.contains if not None else None
+    name_contains = args.in_name if not None else None
     if name_contains: # search for substring in config name
-        print(str(in_name(cfg, args.contains)).lower())
+        print(str(in_name(cfg, args.in_name)).lower())
         return
 
 
