@@ -363,26 +363,26 @@ def process_events(events) -> dict[str, np.ndarray]:
     pfc_f = global_pfc_s[mask]
 
     # ── 4. Assemble output arrays ─────────────────────────────────────────────
-    jets_arr                        = np.zeros(n_sel_total, dtype=JET_DTYPE)
-    jets_arr["pt"]                  = _flat(jets_sel.pt)
-    jets_arr["eta"]                 = flat_jet_eta
-    jets_arr["phi"]                 = flat_jet_phi
-    jets_arr["mass"]                = _flat(jets_sel.mass)
-    jets_arr["regression_a_mass"]   = np.zeros(n_sel_total, dtype=np.float32) # regression mass, to be filled later
-    jets_arr["a_jet"]               = labels_sel
-    jets_arr["truth_pt"]            = truth_pt_sel
-    jets_arr["truth_mass"]          = truth_mass_sel
-    jets_arr["truth_a_mass"]        = truth_amass_sel
-    jets_arr["failed_dau_dr"]       = failed_dau_dr_sel # track info about the daughter particles, to test matching criteria
-    jets_arr["n_dau_failed"]        = n_dau_failed_sel
-    jets_arr["n_dau"]               = n_dau_sel
+    jets_arr                                  = np.zeros(n_sel_total, dtype=JET_DTYPE)
+    jets_arr["pt"]                            = _flat(jets_sel.pt)
+    jets_arr["eta"]                           = flat_jet_eta
+    jets_arr["phi"]                           = flat_jet_phi
+    jets_arr["mass"]                          = _flat(jets_sel.mass)
+    jets_arr["jets_regression_a_mass_preds"]  = np.zeros(n_sel_total, dtype=np.float32) # regression mass, to be filled later
+    jets_arr["a_jet"]                         = labels_sel
+    jets_arr["truth_pt"]                      = truth_pt_sel
+    jets_arr["truth_mass"]                    = truth_mass_sel
+    jets_arr["truth_a_mass"]                  = truth_amass_sel
+    jets_arr["failed_dau_dr"]                 = failed_dau_dr_sel # track info about the daughter particles, to test matching criteria
+    jets_arr["n_dau_failed"]                  = n_dau_failed_sel
+    jets_arr["n_dau"]                         = n_dau_sel
     # weights for tasks
-    jets_arr["signal_only_weight"]               = np.zeros(n_sel_total, dtype=np.float32) # weights for training, to be filled later
-    jets_arr["regression_mass_weight"]           = np.zeros(n_sel_total, dtype=np.float32)
-    jets_arr["binary_classification_weight"]     = np.zeros(n_sel_total, dtype=np.float32)
+    jets_arr["signal_only_weight"]            = np.zeros(n_sel_total, dtype=np.float32) # weights for training, to be filled later
+    jets_arr["regression_mass_weight"]        = np.zeros(n_sel_total, dtype=np.float32)
+    jets_arr["binary_classification_weight"]  = np.zeros(n_sel_total, dtype=np.float32)
 
-    labels_arr                                     = np.zeros(n_sel_total, dtype=LABEL_DTYPE)
-    labels_arr["a_jet"]                            = labels_sel
+    labels_arr                                = np.zeros(n_sel_total, dtype=LABEL_DTYPE)
+    labels_arr["a_jet"]                       = labels_sel
 
     # Vectorized scatter into (n_jets, N_TRACKS) track array
     tracks_arr = np.zeros((n_sel_total, N_TRACKS), dtype=TRACK_DTYPE)
@@ -428,7 +428,7 @@ def process_events(events) -> dict[str, np.ndarray]:
 
     # ── 5. Assemble ATLAS specific output arrays ──────────────────────────────
     # setup for getting ATLAS vars, apply ATLAS 2025 event selection
-    jets_arr["atlas_regression_a_mass"] = np.zeros(n_sel_total, dtype=np.float32)
+    jets_arr["jets_atlas_regression_a_mass_preds"] = np.zeros(n_sel_total, dtype=np.float32)
     atlas_trk_mask = (
             (tracks_arr["valid"] == True) &             # only look at valid tracks
             (tracks_arr["jet_trk_dr"] < DR_MATCH) &     # within jet dR

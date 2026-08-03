@@ -20,7 +20,7 @@
 #
 # Environment overrides:
 #   TRAIN_FILE, VAL_FILE, TEST_FILE   explicit H5 paths
-#   CONFIG                            YAML config (default: atlas_2025_model/configs/jet_classification_train.yaml)
+#   CONFIG                            YAML config (default: atlas_2025_model/configs/jets_atlas_classification_train.yaml)
 
 set -euo pipefail
 

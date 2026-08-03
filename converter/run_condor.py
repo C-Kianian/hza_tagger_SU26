@@ -43,7 +43,7 @@ import yaml
 def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--config", required=True)
-    p.add_argument("--outdir", required=True, help="Directory for per-file H5 outputs")
+    p.add_argument("--outdir", required=True, help="Directory for per-file H5 outputs") # often best to do path/to/data/chunks
     p.add_argument("--merge", action="store_true", help="Merge chunk files after all jobs complete")
     p.add_argument("--max-workers", type=int, default=20)
     p.add_argument("--name", type=str, default="")
@@ -57,7 +57,6 @@ def convert_one_file(file_path: str, out_path: str, cfg: dict):
     os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
     import warnings
-    import awkward as ak
     import uproot
     from coffea.nanoevents import NanoEventsFactory, NanoAODSchema, PFNanoAODSchema
     from converter.processors.jet_dumper import process_events
@@ -151,7 +150,6 @@ def merge_files(outdir: Path, merged_path: Path):
                 labels = fin[LABELS_DATASET][:]
             finally:
                 fin.close() # Always ensure it gets closed explicitly
-			
 
             # write collections to file
             if first:
@@ -188,7 +186,6 @@ def main():
         )
     
     cfg["files"] = expanded_files
-
 
     # ensure condor can run
     try:

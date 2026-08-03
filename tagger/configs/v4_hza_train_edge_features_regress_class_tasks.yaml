@@ -72,7 +72,7 @@ model:
 
             - class_path: salt.models.RegressionTask
               init_args:
-                name: jet_regression_a_mass
+                name: jets_regression_a_mass
                 input_name: jets
                 targets: truth_a_mass
                 loss:

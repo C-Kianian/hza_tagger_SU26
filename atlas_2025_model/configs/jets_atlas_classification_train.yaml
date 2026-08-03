@@ -36,7 +36,7 @@ model:
           modules:
             - class_path: salt.models.ClassificationTask
               init_args:
-                name: jets_classification
+                name: jets_atlas_classification
                 input_name: jets
                 label: a_jet
                 class_names: [a_jet]
@@ -105,7 +105,7 @@ trainer:
   callbacks:
     - class_path: salt.callbacks.Checkpoint
       init_args:
-        monitor_loss: val/jets_classification_loss
+        monitor_loss: val/jets_atlas_classification_loss
     - class_path: lightning.pytorch.callbacks.LearningRateMonitor
     - class_path: lightning.pytorch.callbacks.TQDMProgressBar
       init_args: { refresh_rate: 50 }

@@ -36,7 +36,7 @@ model:
           modules:
             - class_path: salt.models.RegressionTask
               init_args:
-                name: atlas_regression_a_mass
+                name: jets_atlas_regression_a_mass
                 input_name: jets
                 targets: truth_a_mass
                 loss: torch.nn.HuberLoss
@@ -93,7 +93,7 @@ trainer:
   callbacks:
     - class_path: salt.callbacks.Checkpoint
       init_args:
-        monitor_loss: val/atlas_regression_a_mass
+        monitor_loss: val/jets_atlas_regression_a_mass_loss
     - class_path: lightning.pytorch.callbacks.LearningRateMonitor
     - class_path: lightning.pytorch.callbacks.TQDMProgressBar
       init_args: { refresh_rate: 50 }
