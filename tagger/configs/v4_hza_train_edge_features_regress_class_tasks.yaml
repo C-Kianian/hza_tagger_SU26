@@ -1,10 +1,10 @@
-# SALT 0.11 training config for the HZa binary tagger
-# Run with: salt fit --config tagger/configs/hza_train.yaml
+# SALT 0.13 training config for the HZa binary tagger
+# Run with: salt fit --config tagger/configs/v1_v2_hza_train.yaml
 #
 # Requires SALT to be checked out at tagger/salt/ (see README).
 # Adjust data.train_file / val_file / test_file to your H5 paths.
 
-name: hza_tagger_v4_regressor_multi_task
+name: v4_hza_tagger_regressor_multi_task
 
 model:
   lrs_config:
