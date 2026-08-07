@@ -8,7 +8,7 @@ import h5py
 import numpy as np
 
 from common.io import JET_DTYPE, LABEL_DTYPE, TRACK_DTYPE, JETS_DATASET, TRACKS_DATASET, LABELS_DATASET
-from common.variables import N_TRACKS
+from common.variables import N_TRACKS, H5_COMPRESSION, H5_COMPRESSION_OPTS, H5_SHUFFLE
 
 class H5Writer:
     """Incrementally writes structured arrays to an HDF5 file.
@@ -71,7 +71,7 @@ class H5Writer:
     # ── internals ────────────────────────────────────────────────────────────
 
     def _create_datasets(self, n: int, n_tracks: int):
-        kw = dict(compression=self._compression, compression_opts=self._compression_opts)
+        kw = dict(compression=H5_COMPRESSION, compression_opts=H5_COMPRESSION_OPTS, shuffle=H5_SHUFFLE)
         self._f.create_dataset(
             JETS_DATASET,
             shape=(n,),

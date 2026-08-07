@@ -38,7 +38,7 @@ def parse_args():
     p.add_argument("--val", type=float, default=0.15, help="Validation fraction")
     p.add_argument("--test", type=float, default=0.15, help="Testing fraction")
     
-    p.add_argument("--chunk-size", type=int, default=50_000, help="Rows to read at once to save RAM")
+    p.add_argument("--chunk-size", type=int, default=131072, help="Rows to read at once to save RAM")
     p.add_argument("--seed", type=int, default=42, help="RNG seed for reproducible splitting")
     return p.parse_args()
 
@@ -133,7 +133,7 @@ def main():
                             split_counts[name] += int(mask.sum())
 
                         total_jets += n_chunk
-                        print(f"  Processed {stop}/{n_entries} events...")
+                        print(f"  Processed {stop}/{n_entries} jets...")
 
             except (OSError, BlockingIOError) as e:
                 print(f"  FAILED to open {file_path}: {e}")

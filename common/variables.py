@@ -133,6 +133,11 @@ JET_ID_MIN = 2      # tight jet ID bit
 # Truth-matching cone
 DR_MATCH = 0.4
 
+# H5 info, try to always use so files don't vary wildly
+H5_COMPRESSION = "gzip"
+H5_COMPRESSION_OPTS = 4
+H5_SHUFFLE = True
+
 # ── Minimal branch filter for uproot/coffea ──────────────────────────────────
 # Pass to NanoEventsFactory via uproot_options={"filter_name": REQUIRED_BRANCHES}
 # The n* counter branches are required by NanoAODSchema to build jagged arrays.

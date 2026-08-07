@@ -97,6 +97,14 @@ python converter/run_condor.py \
     --outdir data/chunks/ \
     --merge
 ```
+A common error is:
+```bash
+...
+distributed.comm.core.CommClosedError
+```
+To fix, simply clean any output files produces in the last run and then rerun the command; it should work! In general, if you see an error at this step, clear the outputs and rerun, often the error was a one time thing! 
+
+The fastest way to run via condor is to have files of ~1k events each submitted to the workers. Most importantly, ensuring that the worker requirements are low enough to meet the 'lite' criteria as specified [here in the DESY naf Condor docs](https://docs.desy.de/naf/documentation/must_know/#lite-jobs). If you want to experiment, it may be possible to increase the events per job to ~2k, as ~1k appears to consume only about a third of the worker memory. 
 
 Importantly, the condor script produces one merged file or many split files, it is necessary to make train/test/val files, this can be done via:
 
@@ -121,7 +129,7 @@ Most of my work can be found in:
 │   ├── 1st_run         The original h5 processing run
 │   ├── 2nd_run         Adds eta, phi track info for edge features
 │   ├── 3rd_run         Adds ATLAS features, filter, and truth-failing daughter info
-    └── 4th_run         Add different sample weights for robust salt reweighting
+    └── 4th_run         Add different sample weights for robust salt reweighting, more samples for mA = 1.0 and 2.0
 │   └── test_sig        Test signal files guaranteed to work
 ├── model_logs/         Includes logs and checkpoints for trained models
 ├── plots/              Plots for the models and data
@@ -205,24 +213,16 @@ The evaluation script auto-discovers the test H5 file, the most recent checkpoin
 ```bash
 bash analysis/scripts/evaluate.sh --config=/path/to/train_cfg --plot 
 ```
-<details>
-<summary>Likely error</summary>
-If you see a similar error to this:
-
+It is likely you will see an error similar to this:
 ```bash
 SALT not installed.  Run: bash tagger/scripts/setup_salt.sh
 Full error: /lib64/libstdc++.so.6: version CXXABI_1.3.15 not found (required by your/path/to/.conda/envs/hza_tagger/lib/python3.11/site-packages/scipy/fft/_pocketfft/pypocketfft.cpython-311-x86_64-linux-gnu.so)
 ```
-
-Run:
+If so run:
 ```bash
 export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
 ```
-And it should be fixed! 
-
-</details>
-
-Note: This script works for ATLAS models too
+And it should be fixed! Note: This script works for ATLAS models too
 
 It runs two steps in sequence and writes plots to `analysis/plots_in_file_name/`
 

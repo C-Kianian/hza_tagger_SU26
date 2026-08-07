@@ -26,6 +26,7 @@ from common.variables import (
     DR_MATCH,
 )
 from common.io import JET_DTYPE, TRACK_DTYPE, LABEL_DTYPE
+import time
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -57,53 +58,64 @@ def compute_ecfs(tracks_pt, tracks_eta, tracks_phi, jet_pt, beta, calc_e3=False)
     Inputs are expected to be 2D arrays of shape (N_jets, N_tracks),
     except jet_pt which is (N_jets,).
     """
-    # if jet pt < 0 set to 1
+    # remove padded tracks, make into awkward arrays
+    mask = tracks_pt > 0
+    counts = np.sum(mask, axis=1)
+    ak_pt  = ak.unflatten(tracks_pt[mask], counts)
+    ak_eta = ak.unflatten(tracks_eta[mask], counts)
+    ak_phi = ak.unflatten(tracks_phi[mask], counts)
+
+    # make awkward tracks object, each track has trk.pt etc.
+    tracks = ak.zip({"pt": ak_pt, "eta": ak_eta, "phi": ak_phi})
+
+    # in case any jet has 0 pt replace for division operations
     safe_jet_pt = np.where(jet_pt > 0, jet_pt, 1.0)
 
-    # momentum fractions z_i, (N_jets, N_tracks)
-    z = tracks_pt / safe_jet_pt[:, np.newaxis]
+    # calc e2
+    # get unique pairs
+    pairs = ak.combinations(tracks, 2, axis=1, fields=["t1", "t2"])
 
-    # dR matrix between track pairs (N_jets, N_tracks, N_tracks)
-    # actual calculation uses R which swaps eta for y
-    deta = tracks_eta[:, :, np.newaxis] - tracks_eta[:, np.newaxis, :]
-    dphi = tracks_phi[:, :, np.newaxis] - tracks_phi[:, np.newaxis, :]
-    dphi = np.where(dphi > np.pi, dphi - 2*np.pi,
-                    np.where(dphi < -np.pi, dphi + 2*np.pi, dphi))
+    z1 = pairs.t1.pt / safe_jet_pt
+    z2 = pairs.t2.pt / safe_jet_pt
 
-    dr = np.sqrt(deta**2 + dphi**2)
-    dr_beta = dr ** beta
+    # function to calc dr^beta between tracks
+    def get_dr_beta(tk_a, tk_b):
+        deta = tk_a.eta - tk_b.eta
+        dphi = (tk_a.phi - tk_b.phi + np.pi) % (2 * np.pi) - np.pi
+        return np.sqrt(deta**2 + dphi**2) ** beta
 
-    # calc e_2, 2-point ECF
-    # z_i * z_j * dR_ij^beta
-    e2_matrix = z[:, :, np.newaxis] * z[:, np.newaxis, :] * dr_beta
-    # sum all i, j, divide by 2! to remove double counting
-    e2_beta = np.sum(e2_matrix, axis=(1, 2)) / 2.0
+    dr_beta = get_dr_beta(pairs.t1, pairs.t2)
 
-    # for jets that had 0 pt at the start set to 0
-    e2_beta = np.where(jet_pt > 0, e2_beta, 0.0)
+    # sum over a single jet's tracks to get one value
+    e2_awk = ak.sum(z1 * z2 * dr_beta, axis=1)
 
-    if not calc_e3: return e2_beta, None
+    # zero out invalid jets and convert back to np
+    e2 = np.where(jet_pt > 0, ak.to_numpy(e2_awk), 0.0)
 
-    # calc e_3, 3-point ECF
-    # construct z_i * z_j * z_k. (N_jets, N_tracks, N_tracks, N_tracks)
-    z_ijk = z[:, :, np.newaxis, np.newaxis] * z[:, np.newaxis, :, np.newaxis] * z[:, np.newaxis, np.newaxis, :]
+    if not calc_e3: return e2_awk, None
 
-    # Broadcast the 2D pairwise angles into the 4D triplet space
-    dr_ij = dr_beta[:, :, :, np.newaxis]  # dR_ij (add k dimension)
-    dr_jk = dr_beta[:, np.newaxis, :, :]  # dR_jk (add i dimension)
-    dr_ik = dr_beta[:, :, np.newaxis, :]  # dR_ki (add j dimension)
+    # calc e3
+    # get unique triplets
+    triplets = ak.combinations(tracks, 3, axis=1, fields=["t1", "t2", "t3"])
 
-    min_angle = np.minimum(np.minimum(dr_ij, dr_ik), dr_jk)
+    z1 = triplets.t1.pt / safe_jet_pt
+    z2 = triplets.t2.pt / safe_jet_pt
+    z3 = triplets.t3.pt / safe_jet_pt
 
-    e3_matrix = z_ijk * min_angle
+    dr_12 = get_dr_beta(triplets.t1, triplets.t2) # calc dr between the triplets
+    dr_13 = get_dr_beta(triplets.t1, triplets.t3)
+    dr_23 = get_dr_beta(triplets.t2, triplets.t3)
 
-    # sum all i, j, k, divide by 3! (6) to double counting
-    e3_beta = np.sum(e3_matrix, axis=(1, 2, 3)) / 6.0
+    # find min triplet's dr
+    min_dr = np.minimum(dr_12, np.minimum(dr_13, dr_23))
 
-    # for jets that had 0 pt at the start set to 0
-    e3_beta = np.where(jet_pt > 0, e3_beta, 0.0)
+    # sum to get e3
+    e3_awk = ak.sum(z1 * z2 * z3 * min_dr, axis=1)
 
-    return e2_beta, e3_beta
+    # zero out invalid jets and convert back to np
+    e3 = np.where(jet_pt > 0, ak.to_numpy(e3_awk), 0.0)
+
+    return e2, e3
 
 def find_kt_subjets_numpy(eta, phi, pt, n_subjets, subjet_radius):
     """
