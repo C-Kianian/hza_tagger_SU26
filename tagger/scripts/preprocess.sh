@@ -64,6 +64,8 @@ echo "==> Computing normalisation statistics from ${TRAIN_FILE} …"
 "${PYTHON}" common/create_norm_dict.py \
     --input   "${TRAIN_FILE}" \
     --config  "${VARIABLES}" \
-    --output  "${NORM_DICT}"
+    --output  "${NORM_DICT}" \
+    --chunk-size 2000000 \
+    --max-jets 26000000
 
 echo "Norm dict written to ${NORM_DICT}"
