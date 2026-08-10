@@ -110,9 +110,12 @@ fi
 # == reweighting =================================================================
 if [[ "$RW" == true ]]; then
     if [[ "$REGRESS" == true ]]; then # case of multi tasking
-        python tagger/scripts/calc_reweight_vals.py --file "${TRAIN_FILE}" --towrite
-        python tagger/scripts/calc_reweight_vals.py --file "${VAL_FILE}" --towrite
-        python tagger/scripts/calc_reweight_vals.py --file "${TEST_FILE}" --towrite
+        echo "==> Computing reweighting for ${TRAIN_FILE} …"
+        python common/calc_reweight_vals.py --file "${TRAIN_FILE}" --towrite
+        echo "==> Computing reweighting for ${VAL_FILE} …"
+        python common/calc_reweight_vals.py --file "${VAL_FILE}" --towrite
+        echo "==> Computing reweighting for ${TEST_FILE} …"
+        python common/calc_reweight_vals.py --file "${TEST_FILE}" --towrite
     else
         echo "==> Computing reweighting from ${TRAIN_FILE} …"
         read -r W_BKG W_SIG < <("${PYTHON}" tagger/scripts/calc_reweight_vals.py --file "${TRAIN_FILE}")

@@ -56,11 +56,12 @@ SALT_CMD=(
     --data.val_file "${VAL_FILE}"
     --data.test_file "${TEST_FILE}"
     --trainer.accelerator gpu
-    --trainer.devices 1
+    --trainer.devices 2
     --force
 )
 EOF
 # don't think accelerator or devices args make a difference?
+# make sure devices matches line 108 'request_gpus'
 
 # add args if set
 if [[ -n "${EXTRA_LOGGER_ARGS:-}" ]]; then
@@ -105,13 +106,14 @@ output                = ${FINAL_DIR}/condor.out
 error                 = ${FINAL_DIR}/condor.err
 log                   = ${FINAL_DIR}/condor.log
 getenv                = True
-request_gpus          = 1
+request_gpus          = 2
 request_cpus          = 4
 request_memory        = 8GB
-Requirements          = (GPUs_Capability >= 7.0)
-+RequestRuntime       = 7200
++RequestRuntime       = 14400
 queue 1
 EOF
+
+#Requirements          = (GPUs_Capability >= 7.0)
 
 # submit
 info "Submitting job to HTCondor..."
@@ -127,6 +129,7 @@ if [[ -n "${CLUSTER_ID}" ]]; then
     echo " Monitor output:  tail -f ${FINAL_DIR}/condor.out"
     echo " Check queue:     condor_q ${CLUSTER_ID}"
     echo " Remove job:      condor_rm ${CLUSTER_ID}"
+    echo " User priority:   condor_userprio.desy "
     echo " Useful naf info: https://docs.desy.de/naf/documentation/gpu-on-naf/"
     echo " Useful naf commands:"
     echo " condor_status -constraint 'GPUs >= 1'  "

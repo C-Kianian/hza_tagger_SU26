@@ -63,7 +63,7 @@ model:
                   class_path: torch.nn.CrossEntropyLoss
                   init_args:
                     reduction: none
-                sample_weight: binary_classification_weight # weights loaded here
+                sample_weight: binary_classification_weight # weights loaded here, remove if no --rw, otherwise all loss = 0
                 dense_config:
                   input_size: *out_dim
                   output_size: 2
