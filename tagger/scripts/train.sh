@@ -116,9 +116,8 @@ export TEST_FILE="${TEST_FILE}"
 # == reweighting =================================================================
 if [[ "$RW" == true ]]; then
     if [[ "$REGRESS" == true ]]; then # case of multi tasking
-        python common/calc_reweight_vals.py --file "${TRAIN_FILE}" --towrite
-        python common/calc_reweight_vals.py --file "${VAL_FILE}" --towrite
-        python common/calc_reweight_vals.py --file "${TEST_FILE}" --towrite
+        echo "==> Computing reweighting for ${TRAIN_FILE}, ${VAL_FILE}, ${TEST_FILE} …"
+        python common/calc_reweight_vals.py --default "${TRAIN_FILE}" --files "${VAL_FILE}" "${TEST_FILE}" --towrite
     else
         echo "==> Computing reweighting from ${TRAIN_FILE} …"
         read -r W_BKG W_SIG < <("${PYTHON}" common/calc_reweight_vals.py --file "${TRAIN_FILE}")

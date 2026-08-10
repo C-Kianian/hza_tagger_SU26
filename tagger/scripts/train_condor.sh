@@ -110,15 +110,11 @@ fi
 # == reweighting =================================================================
 if [[ "$RW" == true ]]; then
     if [[ "$REGRESS" == true ]]; then # case of multi tasking
-        echo "==> Computing reweighting for ${TRAIN_FILE} …"
-        python common/calc_reweight_vals.py --file "${TRAIN_FILE}" --towrite
-        echo "==> Computing reweighting for ${VAL_FILE} …"
-        python common/calc_reweight_vals.py --file "${VAL_FILE}" --towrite
-        echo "==> Computing reweighting for ${TEST_FILE} …"
-        python common/calc_reweight_vals.py --file "${TEST_FILE}" --towrite
+        echo "==> Computing reweighting for ${TRAIN_FILE}, ${VAL_FILE}, ${TEST_FILE} …"
+        python common/calc_reweight_vals.py --default "${TRAIN_FILE}" --files "${VAL_FILE}" "${TEST_FILE}" --towrite
     else
         echo "==> Computing reweighting from ${TRAIN_FILE} …"
-        read -r W_BKG W_SIG < <("${PYTHON}" tagger/scripts/calc_reweight_vals.py --file "${TRAIN_FILE}")
+        read -r W_BKG W_SIG < <("${PYTHON}" tagger/scripts/calc_reweight_vals.py --default "${TRAIN_FILE}")
         echo "Background rw: ${W_BKG}, signal rw: ${W_SIG}"
         EXTRA_LOSS_ARGS="--model.model.init_args.tasks.init_args.modules.init_args.loss.init_args.weight=[${W_BKG},${W_SIG}]"
     fi
