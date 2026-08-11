@@ -164,7 +164,7 @@ salt fit \
 
 # == Option to rename the output dir ===========================================
 TRAIN_STATUS=$?
-LATEST_DIR=$(ls -td logs/hza_tagger_* 2>/dev/null | head -n 1)
+LATEST_DIR=$(ls -td logs/*hza_tagger_* 2>/dev/null | head -n 1)
 
 if [[ -n "${RENAME}" && -d "${LATEST_DIR:-}" ]]; then
     if [[ "${LATEST_DIR}" != "logs/${RENAME}" ]]; then

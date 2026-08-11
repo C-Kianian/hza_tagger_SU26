@@ -12,7 +12,7 @@ files:
   #- /pnfs/desy.de/cms/tier2/store/user/pgadow/HZa_backgrounds/RunIII2024Summer24BTVNanoAllPF/DYto2Mu_Bin-MLL-50to120_TuneCP5_13p6TeV_powheg-pythia8/RunIII2024Summer24BTVNanoAllPF/260225_105208/0000/btvnano_output_8.root     #*.root
   - /data/dust/user/kianianc/split_300k_bkg/*.root # better to use the split background file
   # ===================================================================
-  # signal sample files (~1k events per file)
+  # signal sample files (~1k events per file, for each mass point ~100k events)
   #- /pnfs/desy.de/cms/tier2/store/user/mjalalva/ggH_HZa_signals/RunIII2024Summer24/ggH_HZa_mA0_5GeV/RunIII2024Summer24HZANanoAllPF/260504_110127/0000/*.root  #mA=0.5
   #- /pnfs/desy.de/cms/tier2/store/user/mjalalva/ggH_HZa_signals/RunIII2024Summer24/ggH_HZa_mA0_75GeV/RunIII2024Summer24HZANanoAllPF/260504_110137/0000/*.root #mA=0.75
   #- /pnfs/desy.de/cms/tier2/store/user/mjalalva/ggH_HZa_signals/RunIII2024Summer24/ggH_HZa_mA1_0GeV/RunIII2024Summer24HZANanoAllPF/260504_110146/0000/*.root  #mA=1.0

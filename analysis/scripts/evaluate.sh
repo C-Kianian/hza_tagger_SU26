@@ -29,7 +29,7 @@ cd "${PROJECT_ROOT}"
 
 # add arg for which  dir to search for model checkpoint
 MODEL_DIR="${MODEL_DIR:-}"
-PLOTS_DIR="${PLOTS_DIR:-}"
+PLOT_DIR="${PLOTS_DIR:-}"
 TRAIN_CFG="${TRAIN_CFG:-}" # arg for the training config
 PLOTS=false
 
@@ -54,11 +54,11 @@ while [[ $# -gt 0 ]]; do
 	          shift 1
 	          ;;
         --plotsdir)
-            PLOTS_DIR="$2"
+            PLOT_DIR="$2"
             shift 2
             ;;
 	      --plotsdir=*)
-	          PLOTS_DIR="${1#*=}"
+	          PLOT_DIR="${1#*=}"
 	          shift 1
 	          ;;
         --plot)
@@ -142,7 +142,7 @@ info "Config:     ${TRAIN_CFG}"
 ATLAS=$(python common/parse_yaml.py --in-name atlas --config "${TRAIN_CFG}")
 REGRESS=$(python common/parse_yaml.py --in-name regress --config "${TRAIN_CFG}")
 CLASS=$(python common/parse_yaml.py --in-name tag --config "${TRAIN_CFG}" || python common/parse_yaml.py --in-name class --config "${TRAIN_CFG}")
-CFG_NAME=$(python common/parse_yaml.py --get_value name --config "${TRAIN_CFG}")
+CFG_NAME=$(python common/parse_yaml.py --get name --config "${TRAIN_CFG}")
 # ── Derive output paths ───────────────────────────────────────────────────────
 # Put scores next to the test file: test.h5 → test_scores.h5
 _base="$(basename "${TEST_FILE}" .h5)"
@@ -179,7 +179,8 @@ CFG_NAME=$(python common/parse_yaml.py --get name --config "${TRAIN_CFG}")
 if [[ "${REGRESS}" == true ]]; then
   "${PYTHON}" analysis/scripts/model_plotting/plots_regression.py \
     --scores "${SCORES_FILE}" \
-    --outdir "${PLOT_DIR}"
+    --outdir "${PLOT_DIR}" \
+    --config "${TRAIN_CFG}"
 fi
 if [[ "${CLASS}" == true ]]; then # out jet classifier case
       "${PYTHON}" analysis/scripts/model_plotting/plots_classification.py \

@@ -24,6 +24,7 @@ def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--scores", required=True, help="H5 file with evaluated datasets")
     p.add_argument("--outdir", default="analysis/plots")
+    p.add_argument("--config", required=True, help="Config used to train the model")
     return p.parse_args()
 
 

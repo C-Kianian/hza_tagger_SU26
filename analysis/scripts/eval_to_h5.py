@@ -39,7 +39,7 @@ def parse_args():
     p.add_argument("--ckpt",   required=True)
     p.add_argument("--config", required=True)
     p.add_argument("--output", required=True)
-    p.add_argument("--batch-size", type=int, default=2048)
+    p.add_argument("--batch-size", type=int, default=2048) # increase gives memory error
     p.add_argument('--atlas', type=str2bool, default=False, help='include if evaluating ATLAS models')
     p.add_argument('--regression', type=str2bool, default=False, help='include if evaluating a regression model')
     return p.parse_args()
@@ -58,7 +58,7 @@ def main():
     args = parse_args()
 
     try:
-        import torch
+        import torch # takes ~4 seconds
         import h5py
         import yaml
     except ImportError as e:
@@ -67,7 +67,7 @@ def main():
 
     # Load SALT ModelWrapper via Lightning's standard checkpoint loading
     try:
-        from salt.modelwrapper import ModelWrapper
+        from salt.modelwrapper import ModelWrapper # takes ~10 seconds
     except ImportError as e:
         print("SALT not installed.  Run: bash tagger/scripts/setup_salt.sh")
         print(f"Full error: {e}")
@@ -186,8 +186,8 @@ def main():
 
                 if task_type == "RegressionTask":
                     # write info to file, for regression tasks where the output may be used as input to another model
-                    if "atlas" in name: fout[primary_jet_ds]["atlas_regression_a_mass", start:stop] = processed_outputs
-                    else: fout[primary_jet_ds]["regression_a_mass", start:stop] = processed_outputs
+                    if "atlas" in name: fout[primary_jet_ds]["jets_atlas_regression_a_mass_preds", start:stop] = processed_outputs
+                    else: fout[primary_jet_ds]["jets_regression_a_mass_preds", start:stop] = processed_outputs
                     processed_outputs = processed_outputs[:, None]
 
                 batch_output[selection_mask] = processed_outputs
