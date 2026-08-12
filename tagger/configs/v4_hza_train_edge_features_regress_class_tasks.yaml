@@ -95,6 +95,7 @@ data:
 
   norm_dict:  tagger/configs/norm_dict.yaml
   class_dict: null  # disable — inherited EOS path from salt/configs/base.yaml is not accessible
+  non_finite_to_num: True # handle when a jet has crazy properties
 
   # No class_dict needed for simple binary classification
   # (use_class_dict: false in the task above)

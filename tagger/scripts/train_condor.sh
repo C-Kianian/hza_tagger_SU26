@@ -17,6 +17,7 @@
 #   bash tagger/scripts/train_condor.sh --normdict=path/to/dict # for a specific norm dict
 #   bash tagger/scripts/train_condor.sh --rename=some_name_here # the name to rename the standard hza_tagger_YMD_HMS out dir
 #   bash tagger/scripts/train_condor.sh --config=path/to/cfg 	  # requires path to specific training config
+# TODO: fix the issue of outputs being written to multiple separate directories
 #
 # Environment overrides:
 #   TRAIN_FILE, VAL_FILE, TEST_FILE   explicit H5 paths
@@ -121,10 +122,8 @@ if [[ "$RW" == true ]]; then
 fi
 
 # == norm dict =================================================================
-if [[ -n "${NORM_DICT:-}" ]]; then
-    [[ -f "${NORM_DICT}" ]] || die "Norm dict not found: ${NORM_DICT}"
-    EXTRA_DATA_ARGS="--data.norm_dict ${NORM_DICT}"
-fi
+[[ -f "${NORM_DICT}" ]] || die "Norm dict not found: ${NORM_DICT}"
+EXTRA_DATA_ARGS="--data.norm_dict ${NORM_DICT}"
 
 NAME=hza_tagger_$(date +%Y%m%d_%H%M%S)
 

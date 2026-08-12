@@ -57,18 +57,39 @@ def _load(scores_path: str, score_ds_name: str):
         "scores": scores,
     }
 
-def plot_scores(to_plot, labels, plot_name, outdir):
-    if len(to_plot) == 4: colors = ["Red", "Lime", "Blue", "Black"] # to align w ATLAS
+def plot_scores(to_plot, plot_name, outdir):
+    if len(to_plot) <= 4: colors = ["Red", "Lime", "Blue", "Black"] # to align w ATLAS
     else: colors = [plt.colormaps["tab10"](i) for i in range(10)] + ["Black"] # for all 10 masses + bkg
 
     fig, ax = plt.subplots()
     bins = np.linspace(0, 1, 50)
-    for p, l, c in zip(to_plot, labels, colors):
-        ax.hist(p, bins=bins, density=True, alpha=0.6, label=l, color=c)
+    for p, c in zip(to_plot, colors):
+        score = p["score"]
+        label = p["label"]
+        ax.hist(score, bins=bins, density=True, alpha=0.6, label=label, color=c)
 
     ax.set_xlabel("P(a-jet)")
     ax.set_ylabel("Normalised counts")
     ax.legend()
+    fig.savefig(outdir / f"{plot_name}.pdf", bbox_inches="tight")
+    plt.close(fig)
+    print(f"Saved {outdir}/{plot_name}.pdf")
+
+def plot_rocs(to_plot, plot_name, outdir):
+    if len(to_plot) <= 4: colors = ["Red", "Lime", "Blue", "Black"] # to align w ATLAS
+    else: colors = [plt.colormaps["tab10"](i) for i in range(10)] + ["Black"] # for all 10 masses + bkg
+
+    fig, ax = plt.subplots()
+    for p, c in zip(to_plot, colors):
+        fpr, tpr, auc, label = p["fpr"], p["tpr"], p["auc"], p["label"]
+        ax.plot(tpr, 1 / (fpr + 1e-9), label=f"{label} AUC={auc:.4f}")
+
+    ax.set_xlabel("Signal efficiency")
+    ax.set_ylabel("1 / Background efficiency")
+    ax.legend()
+    ax.set_yscale("log")
+    ax.set_xlim(0, 1)
+    ax.set_title("ROC — a-jet vs other")
     fig.savefig(outdir / f"{plot_name}.pdf", bbox_inches="tight")
     plt.close(fig)
     print(f"Saved {outdir}/{plot_name}.pdf")
@@ -151,13 +172,16 @@ def main():
 
         # =============================
         # plot classifier scores
-        plot_scores([info["score"] for info in sample_info.values()],
-                    [info["label"] for info in sample_info.values()],
-                    plot_name="all_classifier_scores", outdir=taskdir)
+        plot_scores(to_plot=[info for info in sample_info.values()], plot_name="all_masses_classifier_scores", outdir=taskdir)
 
-        plot_scores([sample_info[0.5]["score"], sample_info[2.0]["score"], sample_info[3.5]["score"], sample_info["bkg"]["score"]],
-                    [sample_info[0.5]["label"], sample_info[2.0]["label"], sample_info[3.5]["label"], sample_info["bkg"]["label"]],
-                    plot_name="mass_specific_classifier_scores", outdir=taskdir)
+        plot_scores(to_plot=[sample_info[0.5], sample_info[2.0], sample_info[3.5], sample_info["bkg"]],
+                    plot_name="ATLAS_masses_classifier_scores", outdir=taskdir)
+
+        # =============================
+        # plot rocs scores
+        plot_rocs(to_plot=[info for info in sample_info.values() if "bkg" not in info["label"].lower()], plot_name="all_masses_ROC", outdir=taskdir)
+
+        plot_rocs(to_plot=[sample_info[0.5], sample_info[2.0], sample_info[3.5]], plot_name="ATLAS_masses_ROC", outdir=taskdir)
 
         # =============================
         # make tpr, fpr, tradeoff table

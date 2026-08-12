@@ -57,11 +57,12 @@ SALT_CMD=(
     --data.test_file "${TEST_FILE}"
     --trainer.accelerator gpu
     --trainer.devices 2
+    --trainer.strategy ddp_find_unused_parameters_true
     --force
 )
 EOF
 # don't think accelerator or devices args make a difference?
-# make sure devices matches line 108 'request_gpus'
+# MAKE SURE devices matches line 108 'request_gpus'
 
 # add args if set
 if [[ -n "${EXTRA_LOGGER_ARGS:-}" ]]; then
@@ -97,7 +98,7 @@ exit \$TRAIN_STATUS
 EOF
 chmod +x "${WORKER_SCRIPT}"
 
-# make submit file + worker requirements, job.sub, 2 hrs = 7200
+# make submit file + worker requirements, job.sub, 1 hr = 3600
 cat << EOF > "${SUB_FILE}"
 universe              = vanilla
 executable            = ${WORKER_SCRIPT}
@@ -108,11 +109,11 @@ log                   = ${FINAL_DIR}/condor.log
 getenv                = True
 request_gpus          = 2
 request_cpus          = 4
-request_memory        = 8GB
-+RequestRuntime       = 14400
+request_memory        = 12GB
++RequestRuntime       = 432000
 queue 1
 EOF
-
+# MAKE SURE request_gpus matches line 59: --trainer.devices
 #Requirements          = (GPUs_Capability >= 7.0)
 
 # submit

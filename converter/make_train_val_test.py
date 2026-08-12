@@ -4,6 +4,8 @@
 Reads chunks from multiple input H5 files and randomly scatters the jets
 into separate train, validation, and test H5 files for model training.
 
+TODO: add stratification, ie. make each train/val/test have the same ratio of sig/bkg and mass points
+
 Usage
 -----
     python converter/split_h5.py -i "data/background/*.h5" "data/signal/*.h5" \
