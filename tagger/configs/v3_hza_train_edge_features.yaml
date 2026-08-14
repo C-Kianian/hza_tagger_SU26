@@ -125,7 +125,7 @@ data:
         #- mass
 
   batch_size:  1024
-  num_workers: 0
+  num_workers: 4 # typically between 4-8 on naf
   num_train: -1
   num_val:   -1
   num_test:  -1

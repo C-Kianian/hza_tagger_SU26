@@ -34,18 +34,22 @@ def parse_args():
 
 def _load(scores_path: str):
     import h5py
+    import re
     from common.io import JETS_DATASET, LABELS_DATASET
 
     with h5py.File(scores_path, "r") as f:
         jets   = f[JETS_DATASET][:]
         labels = f[LABELS_DATASET]["a_jet"][:]
         true_masses = f[JETS_DATASET]["truth_a_mass"][:]
-        name = (Path(scores_path).stem.removeprefix("test_all_samples_filtered_w_atlas_valid_").removesuffix("_scores"))
+
+        match = re.search(r'v\d+', Path(scores_path).stem) # matches salt models w/ v() in the filename
+        name = match.group(0) if match else "ATLAS" # otherwise assume atlas model
         try:
             scores = f["scores"][:, 1] # P(a_jet)
         except Exception as e:
-            print(f"Allowed {e} to pass, assuming this model is an ATLAS classifier")
-            scores = f["scores"][:, 0] # P(signal)
+            print(f"Allowed {e} to pass, assuming this model is v4 or ATLAS classifier")
+            if name == "ATLAS": scores = f["scores"][:, 0] # P(signal)
+            else: scores = f["jets_classification_scores"][:, 1]  # TODO: this can be handled better; "duct-taped" for now
 
     pt   = jets["pt"]
     eta  = jets["eta"]
@@ -75,7 +79,7 @@ def plot_roc(file_dicts, outdir):
             "auc": roc_auc,
         })
 
-        ax.plot(tpr, 1 / (fpr + 1e-9), label=f"{name} AUC={roc_auc:.4f}") # plot info
+        ax.plot(tpr, 1 / (fpr + 1e-7), label=f"{name} AUC={roc_auc:.4f}") # plot info
 
     ax.set_xlabel("Signal efficiency")
     ax.set_ylabel("1 / Background efficiency")
@@ -94,6 +98,7 @@ def main():
 
     file_dicts = {} # store info from each file
     for i, f in enumerate(args.files):
+        print(f"Processing {f}")
         pt, eta, truth_mass, name, labels, scores = _load(f)
         file_dicts[f"file_{i}"] = {"name": name, "pt": pt, "eta": eta, "truth_mass": truth_mass, "labels": labels, "scores": scores}
 

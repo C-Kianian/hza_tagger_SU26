@@ -7,7 +7,7 @@ Produces:
   - Additionally, --atlas can be specified to plot the features used in the ATLAS 2025 paper
   - Similarly, --edg can be specified to plot the edge features that salt calculates on the fly
 
-Usage
+Usage, check __main__ at the bottom for more details
 -----
     python analysis/data_validation_scripts/sig_vs_bkg.py \\
         --file   data/merged.h5 \\
@@ -27,6 +27,7 @@ from pathlib import Path
 import torch
 
 import logging
+
 logging.getLogger("matplotlib.font_manager").setLevel(logging.ERROR) # silence can't find font errors
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -99,22 +100,24 @@ def plot_hist(to_plot, labels, x, name, y="Entries", norm=False, global_norm=Fal
     A "one size fits all" plotting function
     """
     # quick checks, ensure same lengths, less than color length, and non empty
+    valid_plots = []
     if len(to_plot) != len(labels): raise ValueError("to_plot and labels must have the same length")
     if len(to_plot) > 10: raise ValueError("Not enough colors for this many plots.")
     for plot, label in zip(to_plot, labels, strict=True):
-        if len(plot) == 0: raise ValueError(f"Empty for {label}")
+        if len(plot) == 0:
+            print(f"Empty for {label}") #raise ValueError(f"Empty for {label}")
+        else: valid_plots.append(plot)
 
     ll, ul, n_bins = calculate_bin_edges(to_plot, n_bins_float=50) # calc bin edges
 
     # hists
     hists = []
-    for plot in to_plot:
+    for plot in valid_plots:
         h = hist.Hist(hist.axis.Regular(n_bins, ll, ul, label=""))
         h.fill(plot)
         hists.append(h)
         del h
 
-    # norm if specified
     # norm if specified
     hists_sum = sum(h.sum() for h in hists)
     if global_norm:
@@ -134,7 +137,7 @@ def plot_hist(to_plot, labels, x, name, y="Entries", norm=False, global_norm=Fal
     if logx: ax.set_xscale("log")
     colors = list(plt.cm.tab10.colors)
     linestyles = ["-", "--", "-.", ":"]
-    for i, (l, h, c, plot) in enumerate(zip(labels, hists, colors, to_plot)):
+    for i, (l, h, c, plot) in enumerate(zip(labels, hists, colors, valid_plots)):
         hep.histplot(h, ax=ax, label=f"{l} (N = {len(plot)})", color=c, linestyle=linestyles[i % len(linestyles)])
     ax.set_xlabel(x)
     ax.set_ylabel(y)
@@ -153,7 +156,7 @@ def plot_hist(to_plot, labels, x, name, y="Entries", norm=False, global_norm=Fal
 
     plt.close(fig)
 
-def get_edge_feats(tracks):
+def get_edge_feats(tracks, batch_size=1024):
     """
     Calculates salt edge features from h5 tracks dataset, to be used by other analysis scripts
     """
@@ -202,13 +205,26 @@ def get_edge_feats(tracks):
 
     tensor_vars = sorted(required_vars) # get required vars, make map of indices to feats
     indices_map = {var: i for i, var in enumerate(tensor_vars)}
-
-    # make inputs into a tensor as required by salt
-    tracks_tensor = torch.tensor(np.stack([tracks[var] for var in tensor_vars], axis=-1), dtype=torch.float32)
-    # calc edge features
-    edges = calculate_edge_features(tracks_tensor, indices_map, valid_features)
-
     feature_idx = {name: i for i, name in enumerate(valid_features)} # associate features with a name
+
+    # do edgs in batches, like in training
+    n_jets = MAX_EVENTS
+    all_edges = []
+    for start in range(0, n_jets, batch_size):
+        end = min(start + batch_size, n_jets)
+        batch = tracks[start:end]
+
+        batch_np = np.stack([batch[var] for var in tensor_vars], axis=-1) # (batch_size, 40, n_edg_features)
+        batch_tensor = torch.from_numpy(batch_np).float() #  make tensor needed by salt
+
+        if torch.cuda.is_available(): batch_tensor = batch_tensor.to(torch.device("cuda")) # if on gpu speed up
+
+        batch_edges = calculate_edge_features(batch_tensor, indices_map, valid_features) # calc edge features
+
+        all_edges.append(batch_edges.cpu()) # back to original device
+
+    # Reassemble in original jet order
+    edges = torch.cat(all_edges, dim=0)
 
     return edges, valid_features, feature_idx, edge_labels
 
@@ -230,7 +246,6 @@ def main():
             idx = slice(None) if MAX_EVENTS is None else slice(0, MAX_EVENTS)
 
             jets = f["jets"][idx]
-            tracks = f["tracks"][idx]
             labels = f["labels"]["a_jet"][idx] # 1 = signal (a-jet), 0 = background
 
             # x-axis latex and names for each var, jets and tracks
@@ -331,6 +346,7 @@ def main():
 
 
             ############# TRACK INFO ############
+            tracks = f["tracks"][idx]
             # masks
             valid_mask = tracks["valid"].ravel()
             label_flat   = np.repeat(labels, tracks.shape[1])
@@ -390,6 +406,7 @@ def main():
                       x=r"$\sum p_T^{\mathrm{track}}$", name="trk_sum_pt", norm=True, subdir="derived_jet_plots")
 
             jet_pt = jets["pt"]
+            del jets
 
             rel_lead_pt = lead_pt / jet_pt
             rel_sublead_pt = sublead_pt / jet_pt
@@ -422,16 +439,30 @@ def main():
             plot_hist(to_plot=[sig_max_dR, bkg_max_dR], labels=["Signal", "Background"], x=r"Max $\Delta R$",
                       name="trk_dR_max", norm=True, subdir="derived_jet_plots")
 
+            # free mem
+            del jet_labels, jet_var, jet_xtitle, jet_pt, labels
+            del valid_mask, label_flat, sig_mask, bkg_mask, trk_vals, sig_trk_vals, bkg_trk_vals
+            del trk_valid, multi, sig_trk_multi, bkg_trk_multi
+            del valid_pts, sum_pt, sorted_pts, lead_pt, sublead_pt
+            del rel_lead_pt, rel_sublead_pt, rel_sum_pt
+            del dR, mean_dR, max_dR
+            del sig_mean_dR, bkg_mean_dR, sig_max_dR, bkg_max_dR
+            gc.collect()
+
             ############ (OPTIONAL) EDGE FEATURE INFO ###########
             if EDGE:
+                tracks = f["tracks"]
+                print(f"=========== Edge info plots ===========")
+                # do edge work
                 skip = False
                 edges, valid_features, feature_idx, edge_labels = get_edge_feats(tracks)
+                del tracks # free mem
+                gc.collect()
                 if "isSelfLoop" not in valid_features: # need for the plots, this is required if --edg specified
                     print("Skipping edges, isSelfLoop is required for plotting...")
                     skip = True
                 self_loop = edges[..., feature_idx["isSelfLoop"]] == 1
                 if not skip:
-                    print(f"=========== Edge info plots ===========")
                     for feat in valid_features: # plot features we can calc
                         vals = edges[..., feature_idx[feat]] # get feature
                         loop_vals = vals[self_loop] # separate by self loops
@@ -450,7 +481,7 @@ def main():
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument('--file', type=str, required=True, help='path to the file for analysis')
-    parser.add_argument('--maxEvents', type=int, default=None, help='max amount of events to analyze')
+    parser.add_argument('--maxEvents', type=int, default=None, help='max amount of jets to analyze')
     parser.add_argument('--plot', action='store_true', help='set true for all the jet/track plots to be made')
     parser.add_argument('--atlas', action='store_true', help='set true for plots with ATLAS variables')
     parser.add_argument('--edg', action='store_true', help='set true for plots with edge features calculated')

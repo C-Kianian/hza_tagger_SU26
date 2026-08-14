@@ -26,7 +26,7 @@ hep.style.use("CMS")
 
 parser = ArgumentParser()
 parser.add_argument('--files', type=str, required=True, nargs='+', help='space separated list of file(s) to analyze')
-parser.add_argument('--maxEvents', type=int, default=None, help='max amount of events, per file, to analyze')
+parser.add_argument('--maxEvents', type=int, default=None, help='max amount of jets, per file, to analyze')
 parser.add_argument("--outdir", default="analysis/default_sig_vs_sig_outdir")
 args = parser.parse_args()
 

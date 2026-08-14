@@ -110,7 +110,7 @@ getenv                = True
 request_gpus          = 2
 request_cpus          = 4
 request_memory        = 12GB
-+RequestRuntime       = 432000
++RequestRuntime       = 604800
 queue 1
 EOF
 # MAKE SURE request_gpus matches line 59: --trainer.devices
